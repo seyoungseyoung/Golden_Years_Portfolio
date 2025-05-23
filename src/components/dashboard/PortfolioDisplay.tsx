@@ -4,6 +4,7 @@ import type { InvestmentStrategyOutput } from "@/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AssetAllocationChart } from "./AssetAllocationChart";
 import { Briefcase, ListChecks, Lightbulb, Info } from "lucide-react";
+import React from "react"; // Added React import
 
 interface PortfolioDisplayProps {
   strategy: InvestmentStrategyOutput;
