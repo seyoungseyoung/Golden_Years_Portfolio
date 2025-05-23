@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePortfolio } from "@/contexts/PortfolioContext";
 import { PortfolioDisplay } from "@/components/dashboard/PortfolioDisplay";
@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function DashboardPage() {
   const router = useRouter();
   const { strategy, isLoading: contextIsLoading } = usePortfolio(); // isLoading from context is general purpose
-  const [isPageLoading, setIsPageLoading] = React.useState(true);
+  const [isPageLoading, setIsPageLoading] = useState(true);
 
 
   useEffect(() => {
