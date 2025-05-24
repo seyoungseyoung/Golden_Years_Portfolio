@@ -7,17 +7,17 @@ export default function Header() {
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 text-primary hover:opacity-80 transition-opacity">
           <Landmark size={28} />
-          <h1 className="text-2xl font-semibold">Golden Years Portfolio</h1>
+          <h1 className="text-2xl font-semibold">황금빛 노후 포트폴리오</h1>
         </Link>
         <nav className="flex items-center gap-4">
           <Link href="/" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
-            Home
+            홈
           </Link>
           <Link href="/questionnaire" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
-            Questionnaire
+            설문지
           </Link>
           <Link href="/dashboard" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
-            Dashboard
+            대시보드
           </Link>
         </nav>
       </div>

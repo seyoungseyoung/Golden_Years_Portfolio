@@ -14,23 +14,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { strategy, isLoading: contextIsLoading } = usePortfolio(); // isLoading from context is general purpose
+  const { strategy, isLoading: contextIsLoading } = usePortfolio(); 
   const [isPageLoading, setIsPageLoading] = useState(true);
 
 
   useEffect(() => {
-    // This effect handles initial load and ensures strategy is checked from context
-    // For client components, context value might not be available on first server render pass
-    // and will hydrate on client.
-    if (!contextIsLoading) { // Check context loading state if available, or just proceed
+    if (!contextIsLoading) { 
         setIsPageLoading(false);
-        if (!strategy) {
-            // If no strategy after context has loaded, redirect
-            // This check might run multiple times, ensure router.push is conditional
-            // router.push('/questionnaire'); // Potentially too aggressive, user might be navigating back
-        }
     }
-  }, [strategy, contextIsLoading, router]);
+  }, [contextIsLoading]);
   
   if (isPageLoading) {
     return <DashboardSkeleton />;
@@ -40,12 +32,12 @@ export default function DashboardPage() {
     return (
       <div className="flex flex-col items-center justify-center text-center py-12">
         <AlertTriangle className="w-16 h-16 text-destructive mb-4" />
-        <h2 className="text-2xl font-semibold mb-2">No Investment Strategy Found</h2>
+        <h2 className="text-2xl font-semibold mb-2">투자 전략을 찾을 수 없습니다</h2>
         <p className="text-muted-foreground mb-6">
-          Please complete the questionnaire to generate your personalized investment strategy.
+          맞춤형 투자 전략을 생성하려면 설문지를 작성해주세요.
         </p>
         <Button onClick={() => router.push("/questionnaire")} className="bg-primary text-primary-foreground">
-          <PlusCircle className="mr-2 h-4 w-4" /> Go to Questionnaire
+          <PlusCircle className="mr-2 h-4 w-4" /> 설문지로 이동
         </Button>
       </div>
     );
@@ -54,9 +46,9 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8 py-8">
       <div>
-        <h1 className="text-4xl font-bold text-primary mb-2">Your Financial Dashboard</h1>
+        <h1 className="text-4xl font-bold text-primary mb-2">나의 금융 대시보드</h1>
         <p className="text-lg text-muted-foreground">
-          Review your personalized strategy and get AI-driven market insights.
+          맞춤형 전략을 검토하고 AI 기반 시장 인사이트를 얻으세요.
         </p>
       </div>
       <PortfolioDisplay strategy={strategy} />

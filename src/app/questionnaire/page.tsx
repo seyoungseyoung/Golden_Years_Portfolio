@@ -4,7 +4,7 @@ import { Suspense } from "react";
 export default function QuestionnairePage() {
   return (
     <div className="py-8">
-        <Suspense fallback={<p>Loading questionnaire...</p>}>
+        <Suspense fallback={<p>설문지를 불러오는 중...</p>}>
             <QuestionnaireForm />
         </Suspense>
     </div>

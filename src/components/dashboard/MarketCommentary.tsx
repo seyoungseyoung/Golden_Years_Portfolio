@@ -15,7 +15,7 @@ import { Loader2, Newspaper, Zap } from "lucide-react";
 import type { SummarizeMarketChangesOutput } from "@/types";
 
 const formSchema = z.object({
-  marketNews: z.string().min(50, "Please provide substantial market news (at least 50 characters)."),
+  marketNews: z.string().min(50, "충분한 시장 뉴스를 제공해주세요 (최소 50자)."),
 });
 
 type MarketCommentaryFormValues = z.infer<typeof formSchema>;
@@ -32,30 +32,31 @@ export function MarketCommentary() {
 
   async function onSubmit(values: MarketCommentaryFormValues) {
     if (!strategy) {
-      toast({ title: "Error", description: "No investment strategy found. Please generate one first.", variant: "destructive" });
+      toast({ title: "오류", description: "투자 전략을 찾을 수 없습니다. 먼저 생성해주세요.", variant: "destructive" });
       return;
     }
     setIsLoading(true);
+    // For AI, it's often better to keep the input in the language it was trained on, or ensure the AI model supports Korean for these fields.
+    // Here, we assume AI can handle English or the user will input Korean news and AI will process it.
     const portfolioDetails = `Asset Allocation: ${strategy.assetAllocation}. ETF/Stock Recommendations: ${strategy.etfRecommendations}.`;
     
     try {
       const result = await handleSummarizeMarketChangesAction({
-        portfolio: portfolioDetails,
+        portfolio: portfolioDetails, // This might be better in English for the AI
         marketNews: values.marketNews,
       });
 
       if (result.success && result.data) {
         setMarketUpdate(result.data);
-        toast({ title: "Market Update Processed", description: "AI summary and suggestions are ready." });
+        toast({ title: "시장 업데이트 처리됨", description: "AI 요약 및 제안이 준비되었습니다." });
         if (result.data.suggestedAction) {
-            // Trigger simulation view or alert. For now, just log.
             console.log("Suggested action: ", result.data.suggestedAction);
         }
       } else {
-        toast({ title: "Error", description: result.error || "Failed to process market news.", variant: "destructive" });
+        toast({ title: "오류", description: result.error || "시장 뉴스 처리에 실패했습니다.", variant: "destructive" });
       }
     } catch (error) {
-       toast({ title: "Error", description: "An unexpected error occurred.", variant: "destructive" });
+       toast({ title: "오류", description: "예상치 못한 오류가 발생했습니다.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -65,8 +66,8 @@ export function MarketCommentary() {
     <div className="space-y-6">
       <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle className="text-2xl text-primary flex items-center gap-2"><Newspaper /> Market Commentary & AI Insights</CardTitle>
-          <CardDescription>Enter recent market news or trends to get an AI-powered summary and suggested actions for your portfolio.</CardDescription>
+          <CardTitle className="text-2xl text-primary flex items-center gap-2"><Newspaper /> 시장 해설 및 AI 인사이트</CardTitle>
+          <CardDescription>최근 시장 뉴스나 동향을 입력하여 포트폴리오에 대한 AI 기반 요약 및 제안 조치를 받아보세요.</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -76,10 +77,10 @@ export function MarketCommentary() {
                 name="marketNews"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-lg">Market News / Trends</FormLabel>
+                    <FormLabel className="text-lg">시장 뉴스 / 동향</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Paste relevant market news, articles, or describe current trends here..."
+                        placeholder="관련 시장 뉴스, 기사를 붙여넣거나 현재 동향을 여기에 설명해주세요..."
                         className="min-h-[150px]"
                         {...field}
                       />
@@ -90,9 +91,9 @@ export function MarketCommentary() {
               />
               <Button type="submit" className="w-full bg-accent text-accent-foreground hover:bg-accent/90" disabled={isLoading || !strategy}>
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                Get AI Insights
+                AI 인사이트 받기
               </Button>
-              {!strategy && <p className="text-sm text-destructive text-center mt-2">Please generate an investment strategy first to enable market insights.</p>}
+              {!strategy && <p className="text-sm text-destructive text-center mt-2">시장 인사이트를 활성화하려면 먼저 투자 전략을 생성해주세요.</p>}
             </form>
           </Form>
         </CardContent>
@@ -101,39 +102,38 @@ export function MarketCommentary() {
       {marketUpdate && (
         <Card className="shadow-md animate-in fade-in-50">
           <CardHeader>
-            <CardTitle className="text-xl text-primary">AI Market Summary & Suggestions</CardTitle>
+            <CardTitle className="text-xl text-primary">AI 시장 요약 및 제안</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div>
-              <h4 className="font-semibold text-foreground/90">Market Summary:</h4>
+              <h4 className="font-semibold text-foreground/90">시장 요약:</h4>
               <p className="text-foreground/80 whitespace-pre-wrap">{marketUpdate.summary}</p>
             </div>
             <div>
-              <h4 className="font-semibold text-foreground/90">Suggested Action:</h4>
-              <p className="text-foreground/80 whitespace-pre-wrap">{marketUpdate.suggestedAction || "No specific action suggested."}</p>
+              <h4 className="font-semibold text-foreground/90">제안 조치:</h4>
+              <p className="text-foreground/80 whitespace-pre-wrap">{marketUpdate.suggestedAction || "제안된 특정 조치가 없습니다."}</p>
             </div>
             <div>
-              <h4 className="font-semibold text-foreground/90">Reasoning:</h4>
+              <h4 className="font-semibold text-foreground/90">근거:</h4>
               <p className="text-foreground/80 whitespace-pre-wrap">{marketUpdate.reasoning}</p>
             </div>
             {marketUpdate.suggestedAction && (
                  <Button onClick={() => setShowSimulationModal(true)} variant="outline" className="mt-2">
-                    Simulate Suggested Action (Coming Soon)
+                    제안 조치 시뮬레이션 (출시 예정)
                  </Button>
             )}
           </CardContent>
         </Card>
       )}
-      {/* Placeholder for Simulation Modal/View */}
       {showSimulationModal && marketUpdate?.suggestedAction && (
         <Card className="mt-4 p-4 border-accent">
-            <CardHeader><CardTitle>Portfolio Simulation (Preview)</CardTitle></CardHeader>
+            <CardHeader><CardTitle>포트폴리오 시뮬레이션 (미리보기)</CardTitle></CardHeader>
             <CardContent>
-                <p>If you take the action: <strong>{marketUpdate.suggestedAction}</strong></p>
-                <p className="mt-2 text-muted-foreground"><em>Detailed simulation view is under development. This feature will show how your portfolio might change.</em></p>
+                <p>다음 조치를 취할 경우: <strong>{marketUpdate.suggestedAction}</strong></p>
+                <p className="mt-2 text-muted-foreground"><em>상세 시뮬레이션 보기는 개발 중입니다. 이 기능은 포트폴리오가 어떻게 변할 수 있는지 보여줍니다.</em></p>
                 <div className="mt-4 flex gap-2">
-                    <Button variant="default" onClick={() => { console.log("Accepted (Simulated)"); setShowSimulationModal(false); }}>Accept (Simulated)</Button>
-                    <Button variant="outline" onClick={() => { console.log("Rejected (Simulated)"); setShowSimulationModal(false); }}>Reject (Simulated)</Button>
+                    <Button variant="default" onClick={() => { console.log("Accepted (Simulated)"); setShowSimulationModal(false); }}>수락 (시뮬레이션)</Button>
+                    <Button variant="outline" onClick={() => { console.log("Rejected (Simulated)"); setShowSimulationModal(false); }}>거절 (시뮬레이션)</Button>
                 </div>
             </CardContent>
         </Card>

@@ -13,7 +13,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { Input } from "@/components/ui/input"; // Input might not be used if all are selects/textareas
 import {
   Select,
   SelectContent,
@@ -31,58 +31,58 @@ import { useToast } from "@/hooks/use-toast";
 import type { InvestmentStrategyInput } from "@/types";
 
 const formSchema = z.object({
-  retirementHorizon: z.string().min(1, "Retirement horizon is required."),
-  cashFlowNeeds: z.string().min(1, "Cash flow needs are required."),
-  assetSize: z.string().min(1, "Asset size is required."),
-  taxSensitivity: z.string().min(1, "Tax sensitivity is required."),
-  themePreference: z.string().min(1, "Theme preference is required."),
-  managementStyle: z.string().min(1, "Management style is required."),
+  retirementHorizon: z.string().min(1, "은퇴 시기는 필수 항목입니다."),
+  cashFlowNeeds: z.string().min(1, "현금 흐름 필요성은 필수 항목입니다."),
+  assetSize: z.string().min(1, "자산 규모는 필수 항목입니다."),
+  taxSensitivity: z.string().min(1, "세금 민감도는 필수 항목입니다."),
+  themePreference: z.string().min(1, "투자 테마 선호도는 필수 항목입니다."),
+  managementStyle: z.string().min(1, "관리 스타일은 필수 항목입니다."),
   otherAssets: z.string().optional(),
-  riskTolerance: z.string().min(1, "Risk tolerance is required."),
+  riskTolerance: z.string().min(1, "위험 감수 수준은 필수 항목입니다."),
 });
 
 type QuestionnaireFormValues = z.infer<typeof formSchema>;
 
-const questionCategories = {
+const questionCategories: Record<keyof QuestionnaireFormValues, { label: string; description: string; options?: string[]; placeholder?: string }> = {
   retirementHorizon: { 
-    label: "Retirement Horizon", 
-    description: "How many years until your planned retirement?",
-    options: ["Already retired", "Less than 5 years", "5-10 years", "10-20 years", "20+ years"]
+    label: "은퇴 시기", 
+    description: "계획된 은퇴까지 몇 년 남았나요?",
+    options: ["이미 은퇴함", "5년 미만", "5-10년", "10-20년", "20년 이상"]
   },
   cashFlowNeeds: {
-    label: "Cash Flow Needs",
-    description: "Do you need monthly income from your investments? If so, how much?",
-    options: ["No monthly income needed", "$0 - $1,000 / month", "$1,001 - $3,000 / month", "$3,001 - $5,000 / month", "$5,000+ / month"]
+    label: "현금 흐름 필요성",
+    description: "투자를 통해 월 소득이 필요한가요? 그렇다면 얼마인가요?",
+    options: ["월 소득 필요 없음", "월 0원 - 100만원", "월 101만원 - 300만원", "월 301만원 - 500만원", "월 500만원 이상"] // Adjusted currency
   },
   assetSize: {
-    label: "Investment Asset Size",
-    description: "What is the approximate size of your investment assets?",
-    options: ["Less than $50,000", "$50,000 - $249,999", "$250,000 - $999,999", "$1,000,000 - $4,999,999", "$5,000,000+"]
+    label: "투자 자산 규모",
+    description: "투자 자산의 대략적인 규모는 어느 정도인가요?",
+    options: ["5천만원 미만", "5천만원 - 2억 5천만원 미만", "2억 5천만원 - 10억원 미만", "10억원 - 50억원 미만", "50억원 이상"] // Adjusted currency
   },
   taxSensitivity: {
-    label: "Tax Sensitivity",
-    description: "How sensitive are your investments to taxes?",
-    options: ["Very tax-sensitive", "Somewhat tax-sensitive", "Not tax-sensitive"]
+    label: "세금 민감도",
+    description: "투자가 세금에 얼마나 민감한가요?",
+    options: ["매우 민감함", "다소 민감함", "민감하지 않음"]
   },
   themePreference: {
-    label: "Investment Theme Preference",
-    description: "What investment themes do you prefer?",
-    options: ["Dividends", "Growth", "ESG (Environmental, Social, Governance)", "Domestic Focus", "International Focus", "Balanced / Diversified"]
+    label: "투자 테마 선호도",
+    description: "어떤 투자 테마를 선호하시나요?",
+    options: ["배당", "성장", "ESG (환경, 사회, 지배구조)", "국내 중심", "해외 중심", "균형 / 분산"]
   },
   managementStyle: {
-    label: "Management Style",
-    description: "How actively do you want to manage your investments?",
-    options: ["Active (I want to be hands-on)", "Passive / Automated (Prefer a set-it-and-forget-it approach)"]
+    label: "관리 스타일",
+    description: "투자를 얼마나 적극적으로 관리하고 싶으신가요?",
+    options: ["적극적 (직접 관리 선호)", "소극적 / 자동화 (설정 후 신경 쓰지 않는 방식 선호)"]
   },
   riskTolerance: {
-    label: "Risk Tolerance",
-    description: "What is your comfort level with investment risk?",
-    options: ["Conservative (Prioritize capital preservation)", "Moderately Conservative", "Moderate (Balanced approach to risk and return)", "Moderately Aggressive", "Aggressive (Seek higher returns, comfortable with higher risk)"]
+    label: "위험 감수 수준",
+    description: "투자 위험에 대한 편안함 수준은 어느 정도인가요?",
+    options: ["보수적 (자본 보존 우선)", "다소 보수적", "중립적 (위험과 수익 균형)", "다소 공격적", "공격적 (높은 수익 추구, 높은 위험 감수)"]
   },
   otherAssets: {
-    label: "Other Assets",
-    description: "Do you have other significant assets (e.g., pension, real estate)? Please list them briefly.",
-    placeholder: "e.g., Company pension, Rental property in downtown"
+    label: "기타 자산",
+    description: "다른 중요한 자산(예: 연금, 부동산)이 있으신가요? 간략하게 기재해주세요.",
+    placeholder: "예: 회사 연금, 시내 임대 부동산"
   }
 };
 
@@ -113,28 +113,28 @@ export function QuestionnaireForm() {
       if (result.success && result.data) {
         setStrategy(result.data);
         toast({
-          title: "Strategy Generated!",
-          description: "Your personalized investment strategy is ready.",
+          title: "전략 생성 완료!",
+          description: "맞춤형 투자 전략이 준비되었습니다.",
         });
         router.push("/dashboard");
       } else {
-        let errorMessage = result.error || "Failed to generate strategy.";
+        let errorMessage = result.error || "전략 생성에 실패했습니다.";
         if (result.fieldErrors) {
-          errorMessage += " Please check the form fields.";
+          errorMessage += " 입력 항목을 확인해주세요.";
           result.fieldErrors.forEach(err => {
             form.setError(err.path[0] as keyof QuestionnaireFormValues, { message: err.message });
           });
         }
         toast({
-          title: "Error",
+          title: "오류",
           description: errorMessage,
           variant: "destructive",
         });
       }
     } catch (error) {
       toast({
-        title: "Error",
-        description: "An unexpected error occurred.",
+        title: "오류",
+        description: "예상치 못한 오류가 발생했습니다.",
         variant: "destructive",
       });
     } finally {
@@ -146,10 +146,10 @@ export function QuestionnaireForm() {
     <Card className="w-full max-w-2xl mx-auto shadow-xl">
       <CardHeader>
         <CardTitle className="text-3xl text-primary flex items-center gap-2">
-          <Wand2 /> Create Your Investment Profile
+          <Wand2 /> 투자 프로필 만들기
         </CardTitle>
         <CardDescription>
-          Answer these questions to help us tailor a personalized investment strategy for your golden years.
+          황금빛 노후를 위한 맞춤형 투자 전략을 세우는 데 도움이 되도록 다음 질문에 답해주세요.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -168,7 +168,7 @@ export function QuestionnaireForm() {
                        <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder={`Select ${q.label.toLowerCase()}`} />
+                            <SelectValue placeholder={`${q.label} 선택`} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -192,10 +192,10 @@ export function QuestionnaireForm() {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Generating Strategy...
+                  전략 생성 중...
                 </>
               ) : (
-                "Generate My Strategy"
+                "내 전략 생성하기"
               )}
             </Button>
           </form>

@@ -11,8 +11,8 @@ const geistSans = Geist({
 });
 
 export const metadata: Metadata = {
-  title: 'Golden Years Portfolio',
-  description: 'Personalized investment strategies for retirees.',
+  title: '황금빛 노후 포트폴리오',
+  description: '은퇴자를 위한 맞춤형 투자 전략.',
 };
 
 export default function RootLayout({
@@ -21,7 +21,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={geistSans.variable}>
+    <html lang="ko" className={geistSans.variable}>
       <body>
         <PortfolioProvider>
           <Header />
