@@ -13,7 +13,7 @@ import {
   Tooltip,
   Legend,
   ReferenceDot,
-  BarChart,
+  // BarChart, // BarChart는 ComposedChart 내에서 Bar로 대체 가능
 } from 'recharts';
 import { ArrowUpCircle, ArrowDownCircle, MinusCircle } from 'lucide-react';
 import type { AnalyzeStockSignalOutput } from '@/types';
@@ -24,9 +24,14 @@ type SignalEvent = AnalyzeStockSignalOutput['signalEvents'] extends (infer U)[] 
 
 // Custom shape for Candlestick
 const Candlestick = (props: any) => {
-  const { x, y, width, height, payload, yAxis } = props; 
+  const { x, y, width, height, payload, yAxis, index } = props; 
+  // For debugging the first few candles:
+  // if (index < 3) { 
+  //   console.log(`Candle ${index}:`, { x, y, width, height, payload, yAxis });
+  // }
 
   if (!yAxis || typeof yAxis.scale !== 'function') {
+    // console.warn('Candlestick: yAxis or yAxis.scale is not available.', {yAxis});
     return null; 
   }
 
@@ -35,26 +40,41 @@ const Candlestick = (props: any) => {
       typeof payload.close !== 'number' || 
       typeof payload.high !== 'number' || 
       typeof payload.low !== 'number') {
+    // console.warn('Candlestick: Invalid OHLC data in payload.', {payload});
     return null; 
   }
 
   const { open: actualOpen, close: actualClose, high: actualHigh, low: actualLow } = payload;
 
+  // Ensure OHLC values are finite numbers
+  if (![actualOpen, actualClose, actualHigh, actualLow].every(val => Number.isFinite(val))) {
+    // console.warn('Candlestick: Non-finite OHLC values.', {payload});
+    return null;
+  }
+  
   const yOpen = yAxis.scale(actualOpen);
   const yClose = yAxis.scale(actualClose);
   const yHigh = yAxis.scale(actualHigh);
   const yLow = yAxis.scale(actualLow);
 
+  // Ensure scaled values are finite
+  if (![yOpen, yClose, yHigh, yLow].every(val => Number.isFinite(val))) {
+    // console.warn('Candlestick: Non-finite scaled Y values.', { yOpen, yClose, yHigh, yLow });
+    return null;
+  }
+
   const isRising = actualClose >= actualOpen;
-  const bodyFill = isRising ? 'hsl(var(--chart-2))' : 'hsl(var(--destructive))';
-  const wickStroke = 'hsl(var(--foreground))';
+  const bodyFill = isRising ? 'hsl(var(--chart-2))' : 'hsl(var(--destructive))'; // Green for rising, Red for falling
+  const wickStroke = 'hsl(var(--foreground))'; // Or a neutral color for wicks
 
-  const candleX = x; 
+  // Ensure width is at least 1 for visibility
+  const candleWidth = Math.max(1, width);
+  const candleX = x + (width - candleWidth) / 2; // Center the candle if actual width is less than calculated width
 
-  const wickCenterX = candleX + width / 2;
+  const wickCenterX = candleX + candleWidth / 2;
 
   const bodyTopY = Math.min(yOpen, yClose);
-  const bodyHeight = Math.max(1, Math.abs(yOpen - yClose));
+  const bodyHeight = Math.max(1, Math.abs(yOpen - yClose)); // Ensure body height is at least 1px
 
   return (
     <g>
@@ -71,7 +91,7 @@ const Candlestick = (props: any) => {
       <rect
         x={candleX}
         y={bodyTopY}
-        width={width}
+        width={candleWidth}
         height={bodyHeight}
         fill={bodyFill}
       />
@@ -162,15 +182,34 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
     yMax += range * 0.05; 
   }
  
-  if (yMin >= yMax) {
-      yMax = yMin + 1; 
+  if (!isFinite(yMin) || !isFinite(yMax) || yMin >= yMax) {
+      console.warn("Invalid Y-axis domain calculated:", {yMin, yMax, pricesForDomain});
+      // Fallback domain
+      yMin = 0;
+      yMax = 1;
+      if (pricesForDomain.length > 0) {
+        const typicalPrice = pricesForDomain[Math.floor(pricesForDomain.length / 2)];
+        yMin = typicalPrice * 0.8;
+        yMax = typicalPrice * 1.2;
+        if (yMin >= yMax) yMax = yMin +1;
+      }
   }
+
 
   const yMinPriceDomain = yMin;
   const yMaxPriceDomain = yMax;
 
   const volumeData = chartData.filter(d => d.volume !== undefined && d.volume !== null && typeof d.volume === 'number').map(d => d.volume as number);
   const yVolumeMax = volumeData.length > 0 ? Math.max(...volumeData) * 1.5 : 1;
+
+  // Determine X-axis tick interval for readability based on data length
+  let xAxisTickInterval: "preserveStartEnd" | number = "preserveStartEnd";
+  if (chartData.length > 150) { // e.g., for ~1 year of daily data (approx 252 points)
+    xAxisTickInterval = Math.floor(chartData.length / 12); // Roughly monthly ticks
+  } else if (chartData.length > 30) { // For 1-3 months of data
+    xAxisTickInterval = Math.floor(chartData.length / 4); // Roughly weekly ticks
+  }
+
 
   return (
     <div style={{ width: '100%', height: 450 }}>
@@ -184,7 +223,8 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
             angle={-30}
             textAnchor="end"
             height={40}
-            interval="preserveStartEnd" 
+            interval={xAxisTickInterval}
+            // type="category" // Already default for string dataKey
           />
           <YAxis 
             yAxisId="left"
@@ -192,13 +232,13 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
             tickFormatter={YAxisPriceTickFormatter}
             tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
             width={60} 
-            allowDataOverflow={false}
+            allowDataOverflow={false} // Prevent data going out of bounds
             orientation="left"
           />
           <Tooltip content={<CustomTooltip />} />
           <Legend wrapperStyle={{ fontSize: '12px' }} />
           
-          <Bar yAxisId="left" dataKey="close" name="주가" shape={<Candlestick />} />
+          <Bar yAxisId="left" dataKey="close" name="주가" shape={<Candlestick />} barSize={10} />
 
           {signalEvents.map((event, index) => (
             <ReferenceDot
@@ -224,7 +264,8 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
 
       {volumeData.length > 0 && (
         <ResponsiveContainer width="100%" height="30%">
-            <BarChart data={dataWithSignals} margin={{ top: 10, right: 30, left: 5, bottom: 20 }}> 
+            {/* Using ComposedChart for consistency, can also use BarChart */}
+            <ComposedChart data={dataWithSignals} margin={{ top: 10, right: 30, left: 5, bottom: 20 }}> 
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false}/>
             <XAxis 
                 dataKey="date" 
@@ -233,7 +274,7 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
                 axisLine={false}
                 tickLine={false}
                 height={20}
-                interval="preserveStartEnd"
+                interval={xAxisTickInterval}
             />
             <YAxis 
                 yAxisId="rightVolume"
@@ -247,9 +288,10 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
             />
             <Tooltip content={<CustomTooltip />}/>
             <Bar yAxisId="rightVolume" dataKey="volume" name="거래량" fill="hsl(var(--chart-4))" opacity={0.6} barSize={10} />
-            </BarChart>
+            </ComposedChart>
         </ResponsiveContainer>
       )}
     </div>
   );
 }
+

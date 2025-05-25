@@ -43,7 +43,6 @@ const getStockDataTool = ai.defineTool(
     const today = new Date();
     const oneYearAgo = new Date(new Date().setFullYear(today.getFullYear() - 1));
 
-    // 입력값이 없으면 기본값 (지난 1년) 사용
     const startDate = period1 || oneYearAgo.toISOString().split('T')[0];
     const endDate = period2 || today.toISOString().split('T')[0];
     const queryInterval = interval || '1d';
@@ -64,22 +63,31 @@ const getStockDataTool = ai.defineTool(
         return { prices: [], error: `TICKER_NOT_FOUND: 티커 '${ticker}'에 대한 데이터를 야후 파이낸스에서 찾을 수 없습니다. (기간: ${queryOptions.period1} ~ ${queryOptions.period2})` };
       }
 
-      const formattedPrices = results.map(data => ({
-        date: data.date.toISOString().split('T')[0], // YYYY-MM-DD 형식 보장
+      let formattedPrices = results.map(data => ({
+        date: data.date.toISOString().split('T')[0], 
         open: data.open,
         high: data.high,
         low: data.low,
         close: data.close,
         adjClose: data.adjClose,
         volume: data.volume,
-      })).filter(price => price.open !== undefined && price.high !== undefined && price.low !== undefined && price.close !== undefined); // OHLC 값이 있는 데이터만 필터링
+      })).filter(price => 
+          price.open !== undefined && price.open !== null && 
+          price.high !== undefined && price.high !== null && 
+          price.low !== undefined && price.low !== null && 
+          price.close !== undefined && price.close !== null
+      );
+
+      // 날짜 오름차순으로 정렬
+      formattedPrices.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
       if (formattedPrices.length === 0 && results.length > 0) {
         console.warn(`Yahoo Finance: 티커 '${ticker}' 데이터는 있으나, 유효한 OHLC 데이터가 없습니다.`);
         return { prices: [], error: `DATA_INCOMPLETE: 티커 '${ticker}'에 대한 데이터는 존재하지만, 차트를 그리기에 충분한 가격 정보(시가, 고가, 저가, 종가)가 부족합니다.` };
       }
       
-      console.log(`Yahoo Finance 응답 (첫 5개):`, formattedPrices.slice(0,5));
+      console.log(`Yahoo Finance 응답 (정렬 후 첫 5개):`, formattedPrices.slice(0,5));
+      console.log(`Yahoo Finance 응답 (정렬 후 마지막 5개):`, formattedPrices.slice(-5));
       return { prices: formattedPrices };
 
     } catch (error: any) {
@@ -92,7 +100,7 @@ const getStockDataTool = ai.defineTool(
             (error.result && typeof error.result === 'string' && error.result.includes('No data found')) || 
             (error.code && error.code === 'NetworkingError' && error.message.includes('Not Found')) ||
             (error.name === 'Error' && error.message.toLowerCase().includes("not found for ticker")) ||
-            (error.name === 'Error' && error.message.toLowerCase().includes("failed to find symbol")) // Another common error for invalid ticker
+            (error.name === 'Error' && error.message.toLowerCase().includes("failed to find symbol")) 
            ) { 
           errorType = "TICKER_NOT_FOUND";
           errorMessageContent = `티커 '${ticker}'를 찾을 수 없습니다. 올바른 티커인지 확인해주세요.`;
@@ -213,7 +221,6 @@ const analyzeStockSignalFlow = ai.defineFlow(
             signalEvents: []
         };
     }
-    // 필요한 필드가 없으면 기본값으로 초기화 (스키마에 optional로 지정된 경우)
     if (output && !output.indicatorSummary) {
       output.indicatorSummary = {};
     }
@@ -229,3 +236,4 @@ const analyzeStockSignalFlow = ai.defineFlow(
     return output;
   }
 );
+
