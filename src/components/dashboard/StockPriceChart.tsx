@@ -13,7 +13,6 @@ import {
   Tooltip,
   Legend,
   ReferenceDot,
-  // BarChart, // BarChart는 ComposedChart 내에서 Bar로 대체 가능
 } from 'recharts';
 import { ArrowUpCircle, ArrowDownCircle, MinusCircle } from 'lucide-react';
 import type { AnalyzeStockSignalOutput } from '@/types';
@@ -25,10 +24,19 @@ type SignalEvent = AnalyzeStockSignalOutput['signalEvents'] extends (infer U)[] 
 // Custom shape for Candlestick
 const Candlestick = (props: any) => {
   const { x, y, width, height, payload, yAxis, index } = props; 
+
   // For debugging the first few candles:
-  // if (index < 3) { 
-  //   console.log(`Candle ${index}:`, { x, y, width, height, payload, yAxis });
-  // }
+  if (index < 5) { // Log first 5 candles
+    console.log(`Candle ${index} Props:`, { x, y, width, height, payload });
+    if(yAxis && typeof yAxis.scale === 'function' && payload) {
+      console.log(`Candle ${index} Scaled:`, {
+        open: payload.open, scaledOpen: yAxis.scale(payload.open),
+        close: payload.close, scaledClose: yAxis.scale(payload.close),
+        high: payload.high, scaledHigh: yAxis.scale(payload.high),
+        low: payload.low, scaledLow: yAxis.scale(payload.low),
+      });
+    }
+  }
 
   if (!yAxis || typeof yAxis.scale !== 'function') {
     // console.warn('Candlestick: yAxis or yAxis.scale is not available.', {yAxis});
@@ -59,22 +67,21 @@ const Candlestick = (props: any) => {
 
   // Ensure scaled values are finite
   if (![yOpen, yClose, yHigh, yLow].every(val => Number.isFinite(val))) {
-    // console.warn('Candlestick: Non-finite scaled Y values.', { yOpen, yClose, yHigh, yLow });
+    // console.warn('Candlestick: Non-finite scaled Y values.', { yOpen, yClose, yHigh, yLow, actualOpen, actualClose, actualHigh, actualLow });
     return null;
   }
 
   const isRising = actualClose >= actualOpen;
   const bodyFill = isRising ? 'hsl(var(--chart-2))' : 'hsl(var(--destructive))'; // Green for rising, Red for falling
-  const wickStroke = 'hsl(var(--foreground))'; // Or a neutral color for wicks
+  const wickStroke = 'hsl(var(--foreground))'; 
 
-  // Ensure width is at least 1 for visibility
-  const candleWidth = Math.max(1, width);
-  const candleX = x + (width - candleWidth) / 2; // Center the candle if actual width is less than calculated width
+  const candleWidth = Math.max(1, width); 
+  const candleX = x + (width - candleWidth) / 2; 
 
   const wickCenterX = candleX + candleWidth / 2;
 
   const bodyTopY = Math.min(yOpen, yClose);
-  const bodyHeight = Math.max(1, Math.abs(yOpen - yClose)); // Ensure body height is at least 1px
+  const bodyHeight = Math.max(1, Math.abs(yOpen - yClose));
 
   return (
     <g>
@@ -153,8 +160,8 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
   if (!chartData || chartData.length === 0) {
     return <p className="text-muted-foreground">차트 데이터를 불러올 수 없습니다.</p>;
   }
-  console.log("StockPriceChart received chartData (first 5):", chartData.slice(0,5));
-  console.log("StockPriceChart received signalEvents:", signalEvents);
+  // console.log("StockPriceChart received chartData (first 5):", chartData.slice(0,5));
+  // console.log("StockPriceChart received signalEvents:", signalEvents);
 
 
   const dataWithSignals = chartData.map(point => {
@@ -183,15 +190,16 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
   }
  
   if (!isFinite(yMin) || !isFinite(yMax) || yMin >= yMax) {
-      console.warn("Invalid Y-axis domain calculated:", {yMin, yMax, pricesForDomain});
-      // Fallback domain
+      // console.warn("Invalid Y-axis domain calculated:", {yMin, yMax, pricesForDomain});
       yMin = 0;
       yMax = 1;
       if (pricesForDomain.length > 0) {
         const typicalPrice = pricesForDomain[Math.floor(pricesForDomain.length / 2)];
         yMin = typicalPrice * 0.8;
         yMax = typicalPrice * 1.2;
-        if (yMin >= yMax) yMax = yMin +1;
+        if (yMin >= yMax || !isFinite(yMin) || !isFinite(yMax)) { // Final fallback
+             yMin = 0; yMax = (typicalPrice || 1) * 2;
+        }
       }
   }
 
@@ -202,12 +210,11 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
   const volumeData = chartData.filter(d => d.volume !== undefined && d.volume !== null && typeof d.volume === 'number').map(d => d.volume as number);
   const yVolumeMax = volumeData.length > 0 ? Math.max(...volumeData) * 1.5 : 1;
 
-  // Determine X-axis tick interval for readability based on data length
   let xAxisTickInterval: "preserveStartEnd" | number = "preserveStartEnd";
-  if (chartData.length > 150) { // e.g., for ~1 year of daily data (approx 252 points)
-    xAxisTickInterval = Math.floor(chartData.length / 12); // Roughly monthly ticks
-  } else if (chartData.length > 30) { // For 1-3 months of data
-    xAxisTickInterval = Math.floor(chartData.length / 4); // Roughly weekly ticks
+  if (chartData.length > 150) {
+    xAxisTickInterval = Math.floor(chartData.length / 12); 
+  } else if (chartData.length > 30) {
+    xAxisTickInterval = Math.floor(chartData.length / 4); 
   }
 
 
@@ -224,7 +231,6 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
             textAnchor="end"
             height={40}
             interval={xAxisTickInterval}
-            // type="category" // Already default for string dataKey
           />
           <YAxis 
             yAxisId="left"
@@ -232,13 +238,13 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
             tickFormatter={YAxisPriceTickFormatter}
             tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
             width={60} 
-            allowDataOverflow={false} // Prevent data going out of bounds
+            allowDataOverflow={false} 
             orientation="left"
           />
           <Tooltip content={<CustomTooltip />} />
           <Legend wrapperStyle={{ fontSize: '12px' }} />
           
-          <Bar yAxisId="left" dataKey="close" name="주가" shape={<Candlestick />} barSize={10} />
+          <Bar yAxisId="left" dataKey="close" name="주가" shape={<Candlestick />} /> {/* barSize removed for auto-calculation */}
 
           {signalEvents.map((event, index) => (
             <ReferenceDot
@@ -264,7 +270,6 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
 
       {volumeData.length > 0 && (
         <ResponsiveContainer width="100%" height="30%">
-            {/* Using ComposedChart for consistency, can also use BarChart */}
             <ComposedChart data={dataWithSignals} margin={{ top: 10, right: 30, left: 5, bottom: 20 }}> 
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false}/>
             <XAxis 
@@ -287,7 +292,7 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
                 tickLine={false}
             />
             <Tooltip content={<CustomTooltip />}/>
-            <Bar yAxisId="rightVolume" dataKey="volume" name="거래량" fill="hsl(var(--chart-4))" opacity={0.6} barSize={10} />
+            <Bar yAxisId="rightVolume" dataKey="volume" name="거래량" fill="hsl(var(--chart-4))" opacity={0.6} /> {/* barSize removed */}
             </ComposedChart>
         </ResponsiveContainer>
       )}
