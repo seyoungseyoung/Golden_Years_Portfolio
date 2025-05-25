@@ -13,8 +13,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { usePortfolio } from "@/contexts/PortfolioContext";
 import { handleAnalyzeStockSignalAction } from "@/app/dashboard/actions";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Search, Activity, TrendingUp, BarChartHorizontalBig, CheckSquare } from "lucide-react";
+import { Loader2, Search, Activity, TrendingUp, BarChartHorizontalBig, CheckSquare, LineChart } from "lucide-react";
 import type { AnalyzeStockSignalInput, AnalyzeStockSignalOutput } from "@/types";
+import { StockPriceChart } from "./StockPriceChart"; // 새로 추가될 차트 컴포넌트
 
 const availableIndicators = [
   { id: "BollingerBands", label: "볼린저 밴드" },
@@ -34,10 +35,10 @@ const formSchema = z.object({
 type StockSignalFormValues = z.infer<typeof formSchema>;
 
 export function StockSignalAnalyzer() {
-  const { strategy } = usePortfolio(); // Removed contextIsLoading and setContextIsLoading
+  const { strategy } = usePortfolio();
   const { toast } = useToast();
   const [analysisResult, setAnalysisResult] = useState<AnalyzeStockSignalOutput | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false); // Local loading state for this component
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const form = useForm<StockSignalFormValues>({
     resolver: zodResolver(formSchema),
@@ -183,7 +184,7 @@ export function StockSignalAnalyzer() {
               <Button 
                 type="submit" 
                 className="w-full bg-primary text-primary-foreground hover:bg-primary/90" 
-                disabled={isAnalyzing || !strategy?.riskTolerance} // Use local isAnalyzing state
+                disabled={isAnalyzing || !strategy?.riskTolerance}
               >
                 {isAnalyzing ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> 분석 중...</>
@@ -204,15 +205,27 @@ export function StockSignalAnalyzer() {
       {analysisResult && (
         <Card className="shadow-md animate-in fade-in-50 mt-6">
           <CardHeader>
-            <CardTitle className="text-xl text-primary">AI 분석 결과 (종목: {form.getValues("ticker")})</CardTitle>
+            <CardTitle className="text-xl text-primary flex items-center gap-2">
+              <LineChart className="h-6 w-6" />
+              AI 분석 결과 (종목: {form.getValues("ticker")})
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
+            {analysisResult.chartData && analysisResult.chartData.length > 0 && (
+              <div className="my-4">
+                <h3 className="text-lg font-semibold mb-2 text-foreground/90">주가 차트 (모의 데이터)</h3>
+                <StockPriceChart 
+                  chartData={analysisResult.chartData} 
+                  signalEvents={analysisResult.signalEvents || []} 
+                />
+              </div>
+            )}
             <div>
               <h4 className="font-semibold text-foreground/90">매매 신호:</h4>
               <p className={`text-lg font-bold ${
-                analysisResult.signal?.includes("매수") ? "text-green-600" :
-                analysisResult.signal?.includes("매도") ? "text-red-600" :
-                "text-orange-500"
+                analysisResult.signal?.includes("매수") ? "text-green-600 dark:text-green-400" :
+                analysisResult.signal?.includes("매도") ? "text-red-600 dark:text-red-400" :
+                "text-orange-500 dark:text-orange-400"
               }`}>
                 {analysisResult.signal || "정보 없음"}
                 {analysisResult.confidence && <span className="text-xs font-normal text-muted-foreground ml-2"> (확신 수준: {analysisResult.confidence})</span>}
