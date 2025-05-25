@@ -1,3 +1,4 @@
+// src/app/dashboard/page.tsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -5,8 +6,9 @@ import { useRouter } from "next/navigation";
 import { usePortfolio } from "@/contexts/PortfolioContext";
 import { PortfolioDisplay } from "@/components/dashboard/PortfolioDisplay";
 import { MarketCommentary } from "@/components/dashboard/MarketCommentary";
+import { StockSignalAnalyzer } from "@/components/dashboard/StockSignalAnalyzer"; // 추가
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, PlusCircle } from "lucide-react";
+import { AlertTriangle, PlusCircle, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -19,10 +21,10 @@ export default function DashboardPage() {
 
 
   useEffect(() => {
-    if (!contextIsLoading) { 
+    if (!contextIsLoading || strategy !== undefined) { // strategy가 null이나 객체로 명확히 설정될 때까지 기다림
         setIsPageLoading(false);
     }
-  }, [contextIsLoading]);
+  }, [contextIsLoading, strategy]);
   
   if (isPageLoading) {
     return <DashboardSkeleton />;
@@ -48,12 +50,14 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-4xl font-bold text-primary mb-2">나의 금융 대시보드</h1>
         <p className="text-lg text-muted-foreground">
-          맞춤형 전략을 검토하고 AI 기반 시장 인사이트를 얻으세요.
+          맞춤형 전략을 검토하고 AI 기반 시장 인사이트 및 주식 분석을 활용하세요.
         </p>
       </div>
       <PortfolioDisplay strategy={strategy} />
       <Separator className="my-12" />
       <MarketCommentary />
+      <Separator className="my-12" /> 
+      <StockSignalAnalyzer />
     </div>
   );
 }
@@ -87,6 +91,18 @@ function DashboardSkeleton() {
         <CardContent>
           <Skeleton className="h-32 w-full mb-4" />
           <Skeleton className="h-10 w-1/4" />
+        </CardContent>
+      </Card>
+       <Separator className="my-12" />
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-8 w-1/2 mb-2" />
+          <Skeleton className="h-4 w-3/4" />
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-16 w-full mb-4" />
+          <Skeleton className="h-24 w-full mb-4" />
+          <Skeleton className="h-10 w-1/3" />
         </CardContent>
       </Card>
     </div>
