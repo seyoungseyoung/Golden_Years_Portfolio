@@ -1,3 +1,4 @@
+
 // src/components/dashboard/StockPriceChart.tsx
 "use client";
 
@@ -17,17 +18,16 @@ import {
 import { ArrowUpCircle, ArrowDownCircle, MinusCircle } from 'lucide-react';
 import type { AnalyzeStockSignalOutput } from '@/types';
 
-type StockDataPoint = AnalyzeStockSignalOutput['chartData'] extends (infer U)[] ? U : never;
-type SignalEvent = AnalyzeStockSignalOutput['signalEvents'] extends (infer U)[] ? U : never;
+type StockDataPoint = AnalyzeStockSignalOutput['chartData'] extends (infer U)[] | undefined ? U : never;
+type SignalEvent = AnalyzeStockSignalOutput['signalEvents'] extends (infer U)[] | undefined ? U : never;
+
 
 // Custom shape for Candlestick
 const Candlestick = (props: any) => {
-  const { x, y, width, height, payload, yAxis } = props; // y and height are for the nominal dataKey "close"
+  const { x, y, width, height, payload, yAxis } = props; 
 
-  // Guard against yAxis or yAxis.scale being undefined
   if (!yAxis || typeof yAxis.scale !== 'function') {
-    // console.warn('Candlestick: yAxis or yAxis.scale is not available.', { props }); // Optional: for debugging
-    return null; // Don't render if yAxis or its scale function is not available
+    return null; 
   }
 
   if (!payload || 
@@ -35,7 +35,7 @@ const Candlestick = (props: any) => {
       typeof payload.close !== 'number' || 
       typeof payload.high !== 'number' || 
       typeof payload.low !== 'number') {
-    return null; // Don't render if OHLC data is incomplete
+    return null; 
   }
 
   const { open: actualOpen, close: actualClose, high: actualHigh, low: actualLow } = payload;
@@ -51,10 +51,8 @@ const Candlestick = (props: any) => {
 
   const candleX = x; 
 
-  // Wick (thin line from high to low)
   const wickCenterX = candleX + width / 2;
 
-  // Body (rectangle from open to close)
   const bodyTopY = Math.min(yOpen, yClose);
   const bodyHeight = Math.max(1, Math.abs(yOpen - yClose));
 
@@ -83,12 +81,12 @@ const Candlestick = (props: any) => {
 
 
 const YAxisPriceTickFormatter = (value: number) => {
-  if (value === null || value === undefined) return '';
+  if (value === null || value === undefined || !isFinite(value)) return '';
   return value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2});
 };
 
 const YAxisVolumeTickFormatter = (value: number) => {
-  if (value === null || value === undefined) return '';
+  if (value === null || value === undefined || !isFinite(value)) return '';
   if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
   if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
   return value.toLocaleString();
@@ -96,28 +94,28 @@ const YAxisVolumeTickFormatter = (value: number) => {
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
-    const data = payload[0].payload as StockDataPoint & { event?: SignalEvent };
+    const dataPoint = payload[0].payload as StockDataPoint & { event?: SignalEvent };
     
     return (
       <div className="p-2 bg-background/90 border border-border rounded-md shadow-lg text-xs">
         <p className="font-semibold text-foreground">{`날짜: ${label}`}</p>
-        {typeof data.open === 'number' && <p style={{ color: 'hsl(var(--foreground))' }}>시가: {YAxisPriceTickFormatter(data.open)}</p>}
-        {typeof data.high === 'number' && <p style={{ color: 'hsl(var(--chart-2))' }}>고가: {YAxisPriceTickFormatter(data.high)}</p>}
-        {typeof data.low === 'number' && <p style={{ color: 'hsl(var(--destructive))' }}>저가: {YAxisPriceTickFormatter(data.low)}</p>}
-        {typeof data.close === 'number' && <p style={{ color: 'hsl(var(--primary))' }}>종가: {YAxisPriceTickFormatter(data.close)}</p>}
-        {typeof data.volume === 'number' && (
+        {typeof dataPoint.open === 'number' && <p style={{ color: 'hsl(var(--foreground))' }}>시가: {YAxisPriceTickFormatter(dataPoint.open)}</p>}
+        {typeof dataPoint.high === 'number' && <p style={{ color: 'hsl(var(--chart-2))' }}>고가: {YAxisPriceTickFormatter(dataPoint.high)}</p>}
+        {typeof dataPoint.low === 'number' && <p style={{ color: 'hsl(var(--destructive))' }}>저가: {YAxisPriceTickFormatter(dataPoint.low)}</p>}
+        {typeof dataPoint.close === 'number' && <p style={{ color: 'hsl(var(--primary))' }}>종가: {YAxisPriceTickFormatter(dataPoint.close)}</p>}
+        {typeof dataPoint.volume === 'number' && (
             <p style={{ color: 'hsl(var(--chart-4))' }}>
-            거래량: {YAxisVolumeTickFormatter(data.volume)}
+            거래량: {YAxisVolumeTickFormatter(dataPoint.volume)}
             </p>
         )}
-        {data.event && (
+        {dataPoint.event && (
            <p className={`mt-1 font-semibold ${
-            data.event.type === 'buy' ? 'text-green-500' :
-            data.event.type === 'sell' ? 'text-red-500' :
+            dataPoint.event.type === 'buy' ? 'text-green-500' :
+            dataPoint.event.type === 'sell' ? 'text-red-500' :
             'text-yellow-500'
            }`}>
-            신호: {data.event.type === 'buy' ? '매수' : data.event.type === 'sell' ? '매도' : '관망'}
-            {data.event.indicator && ` (${data.event.indicator})`}
+            신호: {dataPoint.event.type === 'buy' ? '매수' : dataPoint.event.type === 'sell' ? '매도' : '관망'}
+            {dataPoint.event.indicator && ` (${dataPoint.event.indicator})`}
            </p>
         )}
       </div>
@@ -135,6 +133,9 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
   if (!chartData || chartData.length === 0) {
     return <p className="text-muted-foreground">차트 데이터를 불러올 수 없습니다.</p>;
   }
+  console.log("StockPriceChart received chartData (first 5):", chartData.slice(0,5));
+  console.log("StockPriceChart received signalEvents:", signalEvents);
+
 
   const dataWithSignals = chartData.map(point => {
     const eventOnDate = signalEvents.find(event => event.date === point.date);
@@ -144,34 +145,29 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
     };
   });
   
-  const pricesForDomain = chartData.flatMap(d => [d.open, d.high, d.low, d.close])
-    .filter(p => typeof p === 'number') as number[];
+  const pricesForDomain = chartData
+    .flatMap(d => [d.open, d.high, d.low, d.close])
+    .filter(p => typeof p === 'number' && isFinite(p)) as number[];
   
-  let calculatedYMin = pricesForDomain.length > 0 ? Math.min(...pricesForDomain) : 0;
-  let calculatedYMax = pricesForDomain.length > 0 ? Math.max(...pricesForDomain) : 1;
+  let yMin = pricesForDomain.length > 0 ? Math.min(...pricesForDomain) : 0;
+  let yMax = pricesForDomain.length > 0 ? Math.max(...pricesForDomain) : 1;
 
-  if (calculatedYMin === calculatedYMax) {
-    const spread = Math.abs(calculatedYMin * 0.05) || 1; 
-    calculatedYMin -= spread;
-    calculatedYMax += spread;
+  if (yMin === yMax) {
+    const spread = Math.max(1, Math.abs(yMin * 0.1)); 
+    yMin -= spread;
+    yMax += spread;
   } else {
-    const range = calculatedYMax - calculatedYMin;
-    calculatedYMin -= range * 0.05;
-    calculatedYMax += range * 0.05;
+    const range = yMax - yMin;
+    yMin -= range * 0.05; 
+    yMax += range * 0.05; 
   }
  
-  if (calculatedYMin > calculatedYMax) {
-      const temp = calculatedYMin;
-      calculatedYMin = calculatedYMax;
-      calculatedYMax = temp;
-  }
-  if (calculatedYMin === calculatedYMax) {
-      calculatedYMin -= 0.5;
-      calculatedYMax += 0.5;
+  if (yMin >= yMax) {
+      yMax = yMin + 1; 
   }
 
-  const yMinPriceDomain = calculatedYMin;
-  const yMaxPriceDomain = calculatedYMax;
+  const yMinPriceDomain = yMin;
+  const yMaxPriceDomain = yMax;
 
   const volumeData = chartData.filter(d => d.volume !== undefined && d.volume !== null && typeof d.volume === 'number').map(d => d.volume as number);
   const yVolumeMax = volumeData.length > 0 ? Math.max(...volumeData) * 1.5 : 1;

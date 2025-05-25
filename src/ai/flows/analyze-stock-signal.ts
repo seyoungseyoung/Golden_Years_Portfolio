@@ -38,22 +38,29 @@ const getStockDataTool = ai.defineTool(
     }),
   },
   async ({ticker, period1, period2, interval}) => {
-    console.log(`getStockDataTool 호출됨: ticker=${ticker}, period1=${period1}, period2=${period2}, interval=${interval}`);
+    console.log(`getStockDataTool 호출됨 (입력): ticker=${ticker}, period1=${period1}, period2=${period2}, interval=${interval}`);
     
     const today = new Date();
     const oneYearAgo = new Date(new Date().setFullYear(today.getFullYear() - 1));
 
+    // 입력값이 없으면 기본값 (지난 1년) 사용
+    const startDate = period1 || oneYearAgo.toISOString().split('T')[0];
+    const endDate = period2 || today.toISOString().split('T')[0];
+    const queryInterval = interval || '1d';
+
     const queryOptions = {
-      period1: period1 || oneYearAgo.toISOString().split('T')[0],
-      period2: period2 || today.toISOString().split('T')[0],
-      interval: interval || '1d',
+      period1: startDate,
+      period2: endDate,
+      interval: queryInterval,
     };
 
+    console.log(`Yahoo Finance API 요청 옵션: ${ticker}, ${JSON.stringify(queryOptions)}`);
+
     try {
-      console.log(`Yahoo Finance 요청: ${ticker}, ${JSON.stringify(queryOptions)}`);
       const results = await yahooFinance.historical(ticker, queryOptions);
       
       if (!results || results.length === 0) {
+        console.warn(`Yahoo Finance: 티커 '${ticker}'에 대한 데이터 없음 (기간: ${queryOptions.period1} ~ ${queryOptions.period2})`);
         return { prices: [], error: `TICKER_NOT_FOUND: 티커 '${ticker}'에 대한 데이터를 야후 파이낸스에서 찾을 수 없습니다. (기간: ${queryOptions.period1} ~ ${queryOptions.period2})` };
       }
 
@@ -65,7 +72,13 @@ const getStockDataTool = ai.defineTool(
         close: data.close,
         adjClose: data.adjClose,
         volume: data.volume,
-      }));
+      })).filter(price => price.open !== undefined && price.high !== undefined && price.low !== undefined && price.close !== undefined); // OHLC 값이 있는 데이터만 필터링
+
+      if (formattedPrices.length === 0 && results.length > 0) {
+        console.warn(`Yahoo Finance: 티커 '${ticker}' 데이터는 있으나, 유효한 OHLC 데이터가 없습니다.`);
+        return { prices: [], error: `DATA_INCOMPLETE: 티커 '${ticker}'에 대한 데이터는 존재하지만, 차트를 그리기에 충분한 가격 정보(시가, 고가, 저가, 종가)가 부족합니다.` };
+      }
+      
       console.log(`Yahoo Finance 응답 (첫 5개):`, formattedPrices.slice(0,5));
       return { prices: formattedPrices };
 
@@ -78,7 +91,8 @@ const getStockDataTool = ai.defineTool(
         if (error.message.includes('404') || 
             (error.result && typeof error.result === 'string' && error.result.includes('No data found')) || 
             (error.code && error.code === 'NetworkingError' && error.message.includes('Not Found')) ||
-            (error.name === 'Error' && error.message.toLowerCase().includes("not found for ticker")) // yahoo-finance2 specific error for invalid ticker
+            (error.name === 'Error' && error.message.toLowerCase().includes("not found for ticker")) ||
+            (error.name === 'Error' && error.message.toLowerCase().includes("failed to find symbol")) // Another common error for invalid ticker
            ) { 
           errorType = "TICKER_NOT_FOUND";
           errorMessageContent = `티커 '${ticker}'를 찾을 수 없습니다. 올바른 티커인지 확인해주세요.`;
@@ -86,7 +100,7 @@ const getStockDataTool = ai.defineTool(
            errorType = "API_ERROR";
            errorMessageContent = `야후 파이낸스 데이터 조회 오류 (${ticker}): ${error.result.message}`;
         } else {
-           errorType = "API_ERROR"; // Or keep as UNKNOWN_ERROR if it's too generic
+           errorType = "API_ERROR"; 
            errorMessageContent = `야후 파이낸스 데이터 조회 중 오류 (${ticker}): ${error.message}`;
         }
       } else if (error.name === 'FailedYahooValidationError') {
@@ -159,7 +173,7 @@ const prompt = ai.definePrompt({
   explanation 필드에 "입력하신 티커 '{{{ticker}}}'를 찾을 수 없었습니다. 티커 심볼이 정확한지 다시 한번 확인해주시겠어요? 또는 다른 티커로 시도해보시는 건 어떠세요?" 와 같이 사용자 친화적인 메시지를 담아주세요. 
   signal 필드는 "분석 불가"로 설정하고, confidence는 "낮음", chartData와 signalEvents는 빈 배열로 설정합니다.
 
-  만약 getStockData 도구의 응답에 'error' 필드가 있고, 오류 메시지가 "TICKER_NOT_FOUND"가 아닌 다른 내용(예: "API_ERROR", "UNKNOWN_ERROR" 등)으로 시작하면, 
+  만약 getStockData 도구의 응답에 'error' 필드가 있고, 오류 메시지가 "TICKER_NOT_FOUND"가 아닌 다른 내용(예: "API_ERROR", "UNKNOWN_ERROR", "DATA_INCOMPLETE" 등)으로 시작하면, 
   해당 오류 내용 전체를 사용자에게 전달하기 위해 explanation 필드에 "데이터 조회 중 다음 오류가 발생했습니다: [받은 오류 메시지 전체]" 와 같이 명확히 명시해주세요.
   signal 필드는 "분석 불가"로 설정하고, confidence는 "낮음", chartData와 signalEvents는 빈 배열로 설정합니다.
 
@@ -209,11 +223,9 @@ const analyzeStockSignalFlow = ai.defineFlow(
     if (output && !output.signalEvents) {
       output.signalEvents = [];
     }
-    if (output && !output.confidence) { // confidence도 optional이므로 추가
+    if (output && !output.confidence) { 
         output.confidence = "정보 없음";
     }
     return output;
   }
 );
-
-
