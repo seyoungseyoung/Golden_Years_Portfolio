@@ -4,15 +4,15 @@
 import React from 'react';
 import {
   ResponsiveContainer,
-  ComposedChart, // Changed from LineChart
-  Bar, // For candlestick body
+  ComposedChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   Legend,
   ReferenceDot,
-  BarChart, // Added BarChart import
+  BarChart,
 } from 'recharts';
 import { ArrowUpCircle, ArrowDownCircle, MinusCircle } from 'lucide-react';
 import type { AnalyzeStockSignalOutput } from '@/types';
@@ -23,6 +23,12 @@ type SignalEvent = AnalyzeStockSignalOutput['signalEvents'] extends (infer U)[] 
 // Custom shape for Candlestick
 const Candlestick = (props: any) => {
   const { x, y, width, height, payload, yAxis } = props; // y and height are for the nominal dataKey "close"
+
+  // Guard against yAxis or yAxis.scale being undefined
+  if (!yAxis || typeof yAxis.scale !== 'function') {
+    // console.warn('Candlestick: yAxis or yAxis.scale is not available.', { props }); // Optional: for debugging
+    return null; // Don't render if yAxis or its scale function is not available
+  }
 
   if (!payload || 
       typeof payload.open !== 'number' || 
@@ -43,14 +49,14 @@ const Candlestick = (props: any) => {
   const bodyFill = isRising ? 'hsl(var(--chart-2))' : 'hsl(var(--destructive))';
   const wickStroke = 'hsl(var(--foreground))';
 
-  const candleX = x; // x from props is the left edge of the bar slot
+  const candleX = x; 
 
   // Wick (thin line from high to low)
   const wickCenterX = candleX + width / 2;
 
   // Body (rectangle from open to close)
   const bodyTopY = Math.min(yOpen, yClose);
-  const bodyHeight = Math.max(1, Math.abs(yOpen - yClose)); // Ensure minimum 1px height for doji-like candles
+  const bodyHeight = Math.max(1, Math.abs(yOpen - yClose));
 
   return (
     <g>
@@ -90,7 +96,7 @@ const YAxisVolumeTickFormatter = (value: number) => {
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
-    const data = payload[0].payload as StockDataPoint & { event?: SignalEvent }; // payload[0].payload contains the original data item
+    const data = payload[0].payload as StockDataPoint & { event?: SignalEvent };
     
     return (
       <div className="p-2 bg-background/90 border border-border rounded-md shadow-lg text-xs">
@@ -150,16 +156,16 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
     calculatedYMax += spread;
   } else {
     const range = calculatedYMax - calculatedYMin;
-    calculatedYMin -= range * 0.05; // Add 5% padding below min
-    calculatedYMax += range * 0.05; // Add 5% padding above max
+    calculatedYMin -= range * 0.05;
+    calculatedYMax += range * 0.05;
   }
  
-  if (calculatedYMin > calculatedYMax) { // Should not happen if logic is correct
+  if (calculatedYMin > calculatedYMax) {
       const temp = calculatedYMin;
       calculatedYMin = calculatedYMax;
       calculatedYMax = temp;
   }
-  if (calculatedYMin === calculatedYMax) { // Final fallback
+  if (calculatedYMin === calculatedYMax) {
       calculatedYMin -= 0.5;
       calculatedYMax += 0.5;
   }
@@ -168,11 +174,10 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
   const yMaxPriceDomain = calculatedYMax;
 
   const volumeData = chartData.filter(d => d.volume !== undefined && d.volume !== null && typeof d.volume === 'number').map(d => d.volume as number);
-  const yVolumeMax = volumeData.length > 0 ? Math.max(...volumeData) * 1.5 : 1; // Increased padding for volume axis
+  const yVolumeMax = volumeData.length > 0 ? Math.max(...volumeData) * 1.5 : 1;
 
   return (
     <div style={{ width: '100%', height: 450 }}>
-      {/* Price Chart (Candlestick) */}
       <ResponsiveContainer width="100%" height="70%">
         <ComposedChart data={dataWithSignals} margin={{ top: 5, right: 30, left: 5, bottom: 5 }}> 
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -197,7 +202,6 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
           <Tooltip content={<CustomTooltip />} />
           <Legend wrapperStyle={{ fontSize: '12px' }} />
           
-          {/* Candlestick Series: dataKey is nominal, shape does the work */}
           <Bar yAxisId="left" dataKey="close" name="주가" shape={<Candlestick />} />
 
           {signalEvents.map((event, index) => (
@@ -222,7 +226,6 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
         </ComposedChart>
       </ResponsiveContainer>
 
-      {/* Volume Chart */}
       {volumeData.length > 0 && (
         <ResponsiveContainer width="100%" height="30%">
             <BarChart data={dataWithSignals} margin={{ top: 10, right: 30, left: 5, bottom: 20 }}> 
@@ -233,11 +236,11 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
                 tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                 axisLine={false}
                 tickLine={false}
-                height={20} // Adjusted height for bottom chart X-axis
+                height={20}
                 interval="preserveStartEnd"
             />
             <YAxis 
-                yAxisId="rightVolume" // Unique yAxisId for volume
+                yAxisId="rightVolume"
                 orientation="left" 
                 domain={[0, yVolumeMax]} 
                 tickFormatter={YAxisVolumeTickFormatter}
@@ -254,4 +257,3 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
     </div>
   );
 }
-
