@@ -1,5 +1,6 @@
+
 import Link from 'next/link';
-import { Landmark } from 'lucide-react';
+import { Landmark, Mail } from 'lucide-react'; // Mail 아이콘 추가
 
 export default function Header() {
   return (
@@ -18,6 +19,10 @@ export default function Header() {
           </Link>
           <Link href="/dashboard" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
             대시보드
+          </Link>
+          <Link href="/contact" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors flex items-center">
+            <Mail size={16} className="mr-1" /> {/* 문의하기 아이콘 추가 */}
+            문의하기
           </Link>
         </nav>
       </div>
