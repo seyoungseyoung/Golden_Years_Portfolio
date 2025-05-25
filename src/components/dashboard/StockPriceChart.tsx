@@ -12,6 +12,7 @@ import {
   Tooltip,
   Legend,
   ReferenceDot,
+  BarChart, // Added BarChart import
 } from 'recharts';
 import { ArrowUpCircle, ArrowDownCircle, MinusCircle } from 'lucide-react';
 import type { AnalyzeStockSignalOutput } from '@/types';
@@ -118,6 +119,11 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   }
   return null;
 };
+
+interface StockPriceChartProps {
+  chartData: StockDataPoint[];
+  signalEvents: SignalEvent[];
+}
 
 export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProps) {
   if (!chartData || chartData.length === 0) {
@@ -248,3 +254,4 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
     </div>
   );
 }
+
