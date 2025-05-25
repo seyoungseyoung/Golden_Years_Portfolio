@@ -34,7 +34,7 @@ const getStockDataTool = ai.defineTool(
           volume: z.number().optional().describe('거래량'),
         })
       ).describe('과거 가격 및 거래량 데이터 배열. 각 항목은 날짜, 시가, 고가, 저가, 종가, 거래량, 수정종가를 포함해야 합니다.'),
-      error: z.string().optional().describe('데이터 조회 중 오류 발생 시 메시지'),
+      error: z.string().optional().describe('데이터 조회 중 오류 발생 시 메시지. 오류 유형(예: "TICKER_NOT_FOUND", "API_ERROR", "UNKNOWN_ERROR")과 상세 메시지를 포함할 수 있음.'),
     }),
   },
   async ({ticker, period1, period2, interval}) => {
@@ -54,7 +54,7 @@ const getStockDataTool = ai.defineTool(
       const results = await yahooFinance.historical(ticker, queryOptions);
       
       if (!results || results.length === 0) {
-        return { prices: [], error: `티커 '${ticker}'에 대한 데이터를 야후 파이낸스에서 찾을 수 없습니다. (기간: ${queryOptions.period1} ~ ${queryOptions.period2})` };
+        return { prices: [], error: `TICKER_NOT_FOUND: 티커 '${ticker}'에 대한 데이터를 야후 파이낸스에서 찾을 수 없습니다. (기간: ${queryOptions.period1} ~ ${queryOptions.period2})` };
       }
 
       const formattedPrices = results.map(data => ({
@@ -71,19 +71,29 @@ const getStockDataTool = ai.defineTool(
 
     } catch (error: any) {
       console.error(`Yahoo Finance API 오류 (${ticker}):`, error);
-      let errorMessage = `티커 '${ticker}'의 데이터를 가져오는 중 오류가 발생했습니다.`;
+      let errorType = "UNKNOWN_ERROR";
+      let errorMessageContent = `티커 '${ticker}'의 데이터를 가져오는 중 알 수 없는 오류가 발생했습니다.`;
+
       if (error.message) {
-        if (error.message.includes('404') || (error.result && typeof error.result === 'string' && error.result.includes('No data found')) || (error.code && error.code === 'NetworkingError' && error.message.includes('Not Found')) ) { 
-          errorMessage = `티커 '${ticker}'를 찾을 수 없습니다. 올바른 티커인지 확인해주세요.`;
+        if (error.message.includes('404') || 
+            (error.result && typeof error.result === 'string' && error.result.includes('No data found')) || 
+            (error.code && error.code === 'NetworkingError' && error.message.includes('Not Found')) ||
+            (error.name === 'Error' && error.message.toLowerCase().includes("not found for ticker")) // yahoo-finance2 specific error for invalid ticker
+           ) { 
+          errorType = "TICKER_NOT_FOUND";
+          errorMessageContent = `티커 '${ticker}'를 찾을 수 없습니다. 올바른 티커인지 확인해주세요.`;
         } else if (error.result && error.result.message) { 
-           errorMessage = `야후 파이낸스 데이터 조회 오류 (${ticker}): ${error.result.message}`;
+           errorType = "API_ERROR";
+           errorMessageContent = `야후 파이낸스 데이터 조회 오류 (${ticker}): ${error.result.message}`;
         } else {
-           errorMessage = `야후 파이낸스 데이터 조회 중 알 수 없는 오류 (${ticker}): ${error.message}`;
+           errorType = "API_ERROR"; // Or keep as UNKNOWN_ERROR if it's too generic
+           errorMessageContent = `야후 파이낸스 데이터 조회 중 오류 (${ticker}): ${error.message}`;
         }
       } else if (error.name === 'FailedYahooValidationError') {
-        errorMessage = `잘못된 요청입니다. 입력값을 확인해주세요. (${error.message})`;
+        errorType = "VALIDATION_ERROR";
+        errorMessageContent = `잘못된 요청입니다. 입력값을 확인해주세요. (${error.message})`;
       }
-      return { prices: [], error: errorMessage };
+      return { prices: [], error: `${errorType}: ${errorMessageContent}` };
     }
   }
 );
@@ -145,12 +155,15 @@ const prompt = ai.definePrompt({
 
   먼저, getStockData 도구를 사용해 {{{ticker}}}의 과거 주가 데이터를 가져오세요. (기본적으로 최근 약 1년 치의 일봉 데이터(날짜, 시가, 고가, 저가, 종가, 거래량 포함)가 요청됩니다.)
   
-  만약 getStockData 도구가 오류를 반환하며 티커를 찾을 수 없다고 하거나 데이터를 가져오지 못했다면, 
+  getStockData 도구의 응답에 'error' 필드가 있고, 오류 메시지가 "TICKER_NOT_FOUND"로 시작하면, 
   explanation 필드에 "입력하신 티커 '{{{ticker}}}'를 찾을 수 없었습니다. 티커 심볼이 정확한지 다시 한번 확인해주시겠어요? 또는 다른 티커로 시도해보시는 건 어떠세요?" 와 같이 사용자 친화적인 메시지를 담아주세요. 
-  signal 필드는 "분석 불가"로 설정하고, chartData와 signalEvents는 빈 배열로 설정합니다.
-  만약 다른 종류의 오류(예: 데이터 포맷 오류 등)가 발생했다면, 해당 오류 내용을 사용자에게 명확히 전달하고 "분석 불가"로 응답해주세요.
+  signal 필드는 "분석 불가"로 설정하고, confidence는 "낮음", chartData와 signalEvents는 빈 배열로 설정합니다.
 
-  데이터를 성공적으로 가져왔다면, 해당 데이터와 선택된 기술 지표 ({{#each indicators}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}})를 종합적으로 고려하여, 다음 사항을 포함한 분석 결과를 제공해주세요:
+  만약 getStockData 도구의 응답에 'error' 필드가 있고, 오류 메시지가 "TICKER_NOT_FOUND"가 아닌 다른 내용(예: "API_ERROR", "UNKNOWN_ERROR" 등)으로 시작하면, 
+  해당 오류 내용 전체를 사용자에게 전달하기 위해 explanation 필드에 "데이터 조회 중 다음 오류가 발생했습니다: [받은 오류 메시지 전체]" 와 같이 명확히 명시해주세요.
+  signal 필드는 "분석 불가"로 설정하고, confidence는 "낮음", chartData와 signalEvents는 빈 배열로 설정합니다.
+
+  데이터를 성공적으로 가져왔다면 (즉, getStockData 도구 응답에 'error' 필드가 없거나 비어 있다면), 해당 데이터와 선택된 기술 지표 ({{#each indicators}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}})를 종합적으로 고려하여, 다음 사항을 포함한 분석 결과를 제공해주세요:
 
   1.  **매매 신호 (signal)**: (예: "강력 매수", "매수 고려", "관망", "매도 고려", "분석 불가")
   2.  **설명 (explanation)**:
@@ -186,7 +199,7 @@ const analyzeStockSignalFlow = ai.defineFlow(
             signalEvents: []
         };
     }
-    // 필요한 필드가 없으면 기본값으로 초기화
+    // 필요한 필드가 없으면 기본값으로 초기화 (스키마에 optional로 지정된 경우)
     if (output && !output.indicatorSummary) {
       output.indicatorSummary = {};
     }
@@ -196,6 +209,11 @@ const analyzeStockSignalFlow = ai.defineFlow(
     if (output && !output.signalEvents) {
       output.signalEvents = [];
     }
+    if (output && !output.confidence) { // confidence도 optional이므로 추가
+        output.confidence = "정보 없음";
+    }
     return output;
   }
 );
+
+
