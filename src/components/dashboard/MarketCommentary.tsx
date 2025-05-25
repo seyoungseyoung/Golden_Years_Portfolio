@@ -1,3 +1,4 @@
+// src/components/dashboard/MarketCommentary.tsx
 "use client";
 
 import { useState } from "react";
@@ -21,8 +22,9 @@ const formSchema = z.object({
 type MarketCommentaryFormValues = z.infer<typeof formSchema>;
 
 export function MarketCommentary() {
-  const { strategy, marketUpdate, setMarketUpdate, isLoading, setIsLoading } = usePortfolio();
+  const { strategy, marketUpdate, setMarketUpdate } = usePortfolio();
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSimulationModal, setShowSimulationModal] = useState(false);
 
   const form = useForm<MarketCommentaryFormValues>({
@@ -35,14 +37,12 @@ export function MarketCommentary() {
       toast({ title: "오류", description: "투자 전략을 찾을 수 없습니다. 먼저 생성해주세요.", variant: "destructive" });
       return;
     }
-    setIsLoading(true);
-    // For AI, it's often better to keep the input in the language it was trained on, or ensure the AI model supports Korean for these fields.
-    // Here, we assume AI can handle English or the user will input Korean news and AI will process it.
+    setIsSubmitting(true);
     const portfolioDetails = `Asset Allocation: ${strategy.assetAllocation}. ETF/Stock Recommendations: ${strategy.etfRecommendations}.`;
     
     try {
       const result = await handleSummarizeMarketChangesAction({
-        portfolio: portfolioDetails, // This might be better in English for the AI
+        portfolio: portfolioDetails,
         marketNews: values.marketNews,
       });
 
@@ -58,7 +58,7 @@ export function MarketCommentary() {
     } catch (error) {
        toast({ title: "오류", description: "예상치 못한 오류가 발생했습니다.", variant: "destructive" });
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   }
 
@@ -89,8 +89,8 @@ export function MarketCommentary() {
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full bg-accent text-accent-foreground hover:bg-accent/90" disabled={isLoading || !strategy}>
-                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
+              <Button type="submit" className="w-full bg-accent text-accent-foreground hover:bg-accent/90" disabled={isSubmitting || !strategy}>
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
                 AI 인사이트 받기
               </Button>
               {!strategy && <p className="text-sm text-destructive text-center mt-2">시장 인사이트를 활성화하려면 먼저 투자 전략을 생성해주세요.</p>}

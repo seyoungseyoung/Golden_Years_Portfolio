@@ -6,25 +6,25 @@ import { useRouter } from "next/navigation";
 import { usePortfolio } from "@/contexts/PortfolioContext";
 import { PortfolioDisplay } from "@/components/dashboard/PortfolioDisplay";
 import { MarketCommentary } from "@/components/dashboard/MarketCommentary";
-import { StockSignalAnalyzer } from "@/components/dashboard/StockSignalAnalyzer"; // 추가
+import { StockSignalAnalyzer } from "@/components/dashboard/StockSignalAnalyzer";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, PlusCircle, TrendingUp } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlertTriangle, PlusCircle } from "lucide-react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { strategy, isLoading: contextIsLoading } = usePortfolio(); 
+  const { strategy, isInitialized } = usePortfolio(); 
   const [isPageLoading, setIsPageLoading] = useState(true);
 
 
   useEffect(() => {
-    if (!contextIsLoading || strategy !== undefined) { // strategy가 null이나 객체로 명확히 설정될 때까지 기다림
+    if (isInitialized) { // Wait for context to confirm initialization status
         setIsPageLoading(false);
     }
-  }, [contextIsLoading, strategy]);
+  }, [isInitialized]);
   
   if (isPageLoading) {
     return <DashboardSkeleton />;

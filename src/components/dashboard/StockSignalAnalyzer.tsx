@@ -34,10 +34,10 @@ const formSchema = z.object({
 type StockSignalFormValues = z.infer<typeof formSchema>;
 
 export function StockSignalAnalyzer() {
-  const { strategy, isLoading: contextIsLoading, setIsLoading: setContextIsLoading } = usePortfolio();
+  const { strategy } = usePortfolio(); // Removed contextIsLoading and setContextIsLoading
   const { toast } = useToast();
   const [analysisResult, setAnalysisResult] = useState<AnalyzeStockSignalOutput | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false); // Local loading state for this component
 
   const form = useForm<StockSignalFormValues>({
     resolver: zodResolver(formSchema),
@@ -58,7 +58,6 @@ export function StockSignalAnalyzer() {
     }
 
     setIsAnalyzing(true);
-    setContextIsLoading(true); // 전역 로딩 상태 사용
     setAnalysisResult(null);
 
     const inputForAI: AnalyzeStockSignalInput = {
@@ -87,7 +86,6 @@ export function StockSignalAnalyzer() {
       toast({ title: "네트워크 오류", description: "분석 중 예상치 못한 오류가 발생했습니다.", variant: "destructive" });
     } finally {
       setIsAnalyzing(false);
-      setContextIsLoading(false); // 전역 로딩 상태 해제
     }
   }
 
@@ -185,7 +183,7 @@ export function StockSignalAnalyzer() {
               <Button 
                 type="submit" 
                 className="w-full bg-primary text-primary-foreground hover:bg-primary/90" 
-                disabled={isAnalyzing || contextIsLoading || !strategy?.riskTolerance}
+                disabled={isAnalyzing || !strategy?.riskTolerance} // Use local isAnalyzing state
               >
                 {isAnalyzing ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> 분석 중...</>

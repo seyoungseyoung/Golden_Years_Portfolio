@@ -1,3 +1,4 @@
+// src/contexts/PortfolioContext.tsx
 "use client";
 
 import type { InvestmentStrategyOutput } from '@/ai/flows/generate-investment-strategy';
@@ -9,8 +10,7 @@ interface PortfolioState {
   setStrategy: (strategy: InvestmentStrategyOutput | null) => void;
   marketUpdate: SummarizeMarketChangesOutput | null;
   setMarketUpdate: (update: SummarizeMarketChangesOutput | null) => void;
-  isLoading: boolean;
-  setIsLoading: (loading: boolean) => void;
+  isInitialized: boolean; // New state to indicate if context has loaded initial data
 }
 
 const PortfolioContext = createContext<PortfolioState | undefined>(undefined);
@@ -21,7 +21,6 @@ const MARKET_UPDATE_STORAGE_KEY = 'goldenYearsMarketUpdate';
 export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
   const [strategy, setStrategyState] = useState<InvestmentStrategyOutput | null>(null);
   const [marketUpdate, setMarketUpdateState] = useState<SummarizeMarketChangesOutput | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
 
   useEffect(() => {
@@ -37,12 +36,12 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error("Failed to load from localStorage", error);
     }
-    setIsInitialized(true);
+    setIsInitialized(true); // Signal that initialization is complete
   }, []);
   
   const setStrategy = (newStrategy: InvestmentStrategyOutput | null) => {
     setStrategyState(newStrategy);
-    if (isInitialized) {
+    if (isInitialized) { // Only save to localStorage if context is initialized
       if (newStrategy) {
         localStorage.setItem(STRATEGY_STORAGE_KEY, JSON.stringify(newStrategy));
       } else {
@@ -53,7 +52,7 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
 
   const setMarketUpdate = (newUpdate: SummarizeMarketChangesOutput | null) => {
     setMarketUpdateState(newUpdate);
-     if (isInitialized) {
+    if (isInitialized) { // Only save to localStorage if context is initialized
       if (newUpdate) {
         localStorage.setItem(MARKET_UPDATE_STORAGE_KEY, JSON.stringify(newUpdate));
       } else {
@@ -62,21 +61,27 @@ export const PortfolioProvider = ({ children }: { children: ReactNode }) => {
     }
   };
   
+  // These useEffects ensure that if strategy/marketUpdate are populated during the initial load,
+  // they are saved once isInitialized becomes true.
   useEffect(() => {
     if (isInitialized && strategy) {
         localStorage.setItem(STRATEGY_STORAGE_KEY, JSON.stringify(strategy));
+    } else if (isInitialized && strategy === null) {
+        localStorage.removeItem(STRATEGY_STORAGE_KEY);
     }
   }, [strategy, isInitialized]);
 
   useEffect(() => {
     if (isInitialized && marketUpdate) {
         localStorage.setItem(MARKET_UPDATE_STORAGE_KEY, JSON.stringify(marketUpdate));
+    } else if (isInitialized && marketUpdate === null) {
+        localStorage.removeItem(MARKET_UPDATE_STORAGE_KEY);
     }
   }, [marketUpdate, isInitialized]);
 
 
   return (
-    <PortfolioContext.Provider value={{ strategy, setStrategy, marketUpdate, setMarketUpdate, isLoading, setIsLoading }}>
+    <PortfolioContext.Provider value={{ strategy, setStrategy, marketUpdate, setMarketUpdate, isInitialized }}>
       {children}
     </PortfolioContext.Provider>
   );

@@ -1,3 +1,4 @@
+// src/components/forms/QuestionnaireForm.tsx
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,7 +14,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input"; // Input might not be used if all are selects/textareas
+import { Input } from "@/components/ui/input"; 
 import {
   Select,
   SelectContent,
@@ -29,6 +30,7 @@ import { usePortfolio } from "@/contexts/PortfolioContext";
 import { handleGenerateStrategyAction } from "@/app/questionnaire/actions";
 import { useToast } from "@/hooks/use-toast";
 import type { InvestmentStrategyInput } from "@/types";
+import { useState } from "react"; // Added useState
 
 const formSchema = z.object({
   retirementHorizon: z.string().min(1, "은퇴 시기는 필수 항목입니다."),
@@ -52,12 +54,12 @@ const questionCategories: Record<keyof QuestionnaireFormValues, { label: string;
   cashFlowNeeds: {
     label: "현금 흐름 필요성",
     description: "투자를 통해 월 소득이 필요한가요? 그렇다면 얼마인가요?",
-    options: ["월 소득 필요 없음", "월 0원 - 100만원", "월 101만원 - 300만원", "월 301만원 - 500만원", "월 500만원 이상"] // Adjusted currency
+    options: ["월 소득 필요 없음", "월 0원 - 100만원", "월 101만원 - 300만원", "월 301만원 - 500만원", "월 500만원 이상"]
   },
   assetSize: {
     label: "투자 자산 규모",
     description: "투자 자산의 대략적인 규모는 어느 정도인가요?",
-    options: ["5천만원 미만", "5천만원 - 2억 5천만원 미만", "2억 5천만원 - 10억원 미만", "10억원 - 50억원 미만", "50억원 이상"] // Adjusted currency
+    options: ["5천만원 미만", "5천만원 - 2억 5천만원 미만", "2억 5천만원 - 10억원 미만", "10억원 - 50억원 미만", "50억원 이상"]
   },
   taxSensitivity: {
     label: "세금 민감도",
@@ -89,8 +91,9 @@ const questionCategories: Record<keyof QuestionnaireFormValues, { label: string;
 
 export function QuestionnaireForm() {
   const router = useRouter();
-  const { setStrategy, isLoading, setIsLoading } = usePortfolio();
+  const { setStrategy } = usePortfolio(); // Removed isLoading and setIsLoading
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false); // Local loading state
 
   const form = useForm<QuestionnaireFormValues>({
     resolver: zodResolver(formSchema),
@@ -107,7 +110,7 @@ export function QuestionnaireForm() {
   });
 
   async function onSubmit(values: QuestionnaireFormValues) {
-    setIsLoading(true);
+    setIsSubmitting(true);
     try {
       const result = await handleGenerateStrategyAction(values as InvestmentStrategyInput);
       if (result.success && result.data) {
@@ -138,7 +141,7 @@ export function QuestionnaireForm() {
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   }
 
@@ -188,8 +191,8 @@ export function QuestionnaireForm() {
               />
             ))}
             
-            <Button type="submit" className="w-full text-lg py-6 bg-accent text-accent-foreground hover:bg-accent/90" disabled={isLoading}>
-              {isLoading ? (
+            <Button type="submit" className="w-full text-lg py-6 bg-accent text-accent-foreground hover:bg-accent/90" disabled={isSubmitting}>
+              {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   전략 생성 중...
