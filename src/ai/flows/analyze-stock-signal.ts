@@ -64,7 +64,7 @@ const getStockDataTool = ai.defineTool(
         high: data.high,
         low: data.low,
         close: data.close,
-        adjClose: data.adjClose, // adjClose도 포함
+        adjClose: data.adjClose,
         volume: data.volume,
       }));
       console.log(`Yahoo Finance 응답 (첫 5개):`, formattedPrices.slice(0,5));
@@ -74,9 +74,9 @@ const getStockDataTool = ai.defineTool(
       console.error(`Yahoo Finance API 오류 (${ticker}):`, error);
       let errorMessage = `티커 '${ticker}'의 데이터를 가져오는 중 오류가 발생했습니다.`;
       if (error.message) {
-        if (error.message.includes('404 Not Found')) {
+        if (error.message.includes('404') || (error.result && typeof error.result === 'string' && error.result.includes('No data found'))) { // yahoo-finance2 404 or specific no data message
           errorMessage = `티커 '${ticker}'를 찾을 수 없습니다. 올바른 티커인지 확인해주세요.`;
-        } else if (error.result && error.result.message) { // yahoo-finance2 오류 형식
+        } else if (error.result && error.result.message) { 
            errorMessage = `야후 파이낸스 데이터 조회 오류 (${ticker}): ${error.result.message}`;
         } else {
            errorMessage = `야후 파이낸스 데이터 조회 중 알 수 없는 오류 (${ticker}): ${error.message}`;
@@ -117,7 +117,7 @@ const AnalyzeStockSignalOutputSchema = z.object({
       date: z.string().describe("신호 발생 날짜 (YYYY-MM-DD). chartData에 포함된 날짜여야 함."),
       type: z.enum(["buy", "sell", "hold"]).describe("신호 유형 (매수, 매도, 관망)"),
       price: z.number().describe("신호 발생 시점의 가격 (해당 날짜의 종가)"),
-      indicator: z.string().optional().describe("이 신호를 트리거한 주요 지표 또는 근거. 예: 'RSI 과매도', '볼린저밴드 하단 터치'"),
+      indicator: z.string().optional().describe("이 신호를 트리거한 주요 지표 또는 근거. 예: 'RSI 과매도', '볼린저밴드 하단 터치', 'MACD 골든크로스 및 거래량 증가'"),
     })
   ).optional().describe("차트에 화살표 등으로 표시할 주요 매매 신호 이벤트 (최대 3-5개). 각 이벤트는 어떤 지표(들)에 의해 트리거되었는지 명시하는 것이 좋습니다.")
 });
@@ -141,7 +141,11 @@ const prompt = ai.definePrompt({
   - 사용자 위험 감수 수준: {{{riskTolerance}}}
 
   먼저, getStockData 도구를 사용해 {{{ticker}}}의 과거 주가 데이터를 가져오세요. (기본적으로 최근 약 1년 치의 일봉 데이터(날짜, 시가, 고가, 저가, 종가, 거래량 포함)가 요청됩니다.)
-  만약 getStockData 도구가 오류를 반환하거나 데이터를 가져오지 못했다면, 사용자에게 해당 오류를 명확히 전달하고 "분석 불가"로 응답해주세요. chartData와 signalEvents는 빈 배열로 설정합니다.
+  
+  만약 getStockData 도구가 오류를 반환하며 티커를 찾을 수 없다고 하거나 데이터를 가져오지 못했다면, 
+  explanation 필드에 "입력하신 티커 '{{{ticker}}}'를 찾을 수 없었습니다. 티커 심볼이 정확한지 다시 한번 확인해주시겠어요? 또는 다른 티커로 시도해보시는 건 어떠세요?" 와 같이 사용자 친화적인 메시지를 담아주세요. 
+  signal 필드는 "분석 불가"로 설정하고, chartData와 signalEvents는 빈 배열로 설정합니다.
+  만약 다른 종류의 오류(예: 데이터 포맷 오류, API 키 오류 등)가 발생했다면, 해당 오류 내용을 사용자에게 명확히 전달하고 "분석 불가"로 응답해주세요.
 
   데이터를 성공적으로 가져왔다면, 해당 데이터와 선택된 기술 지표 ({{#each indicators}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}})를 종합적으로 고려하여, 다음 사항을 포함한 분석 결과를 제공해주세요:
 
@@ -153,7 +157,7 @@ const prompt = ai.definePrompt({
   3.  **확신 수준 (confidence, 선택 사항)**: 신호에 대한 당신의 확신 수준 (높음, 중간, 낮음)
   4.  **지표별 요약 (indicatorSummary, 선택 사항)**: 각 선택된 지표가 나타내는 간략한 신호 또는 상태를 객체 형태로 제공해주세요. (예: {"RSI": "과매도 (28.5)", "BollingerBands": "하단 근접", "MACD": "데드 크로스 발생"})
   5.  **차트 데이터 (chartData)**: getStockData 도구에서 반환된 과거 주가 데이터 전체(날짜, 시가, 고가, 저가, 종가, 거래량 포함)를 그대로 제공해주세요. 이 데이터는 차트 표시에 사용됩니다. 데이터가 없다면 빈 배열로 제공해주세요.
-  6.  **신호 이벤트 (signalEvents)**: 분석 결과, 차트 상에 화살표로 표시할 만한 주요 매수(buy), 매도(sell) 또는 관망(hold) 신호가 발생했다고 판단되는 지점을 날짜(date), 신호 유형(type: 'buy'|'sell'|'hold'), 당시 종가(price), 그리고 **해당 신호를 판단하게 된 주요 지표 또는 근거(indicator, 예: 'RSI 과매도 및 볼린저밴드 하단 터치', 'MACD 골든크로스')**와 함께 배열로 제공해주세요. 최대 3-5개의 주요 이벤트를 선정하고, 날짜는 제공된 chartData 내의 실제 날짜여야 하며, 가격은 해당 날짜의 종가여야 합니다. 데이터가 없다면 빈 배열로 제공해주세요.
+  6.  **신호 이벤트 (signalEvents)**: 분석 결과, 차트 상에 화살표로 표시할 만한 주요 매수(buy), 매도(sell) 또는 관망(hold) 신호가 발생했다고 판단되는 지점을 날짜(date), 신호 유형(type: 'buy'|'sell'|'hold'), 당시 종가(price), 그리고 **해당 신호를 판단하게 된 주요 지표 또는 근거(indicator, 예: 'RSI 과매도 및 볼린저밴드 하단 터치', 'MACD 골든크로스 및 거래량 증가')**와 함께 배열로 제공해주세요. 최대 3-5개의 주요 이벤트를 선정하고, 날짜는 제공된 chartData 내의 실제 날짜여야 하며, 가격은 해당 날짜의 종가여야 합니다. 데이터가 없다면 빈 배열로 제공해주세요.
 
   결과는 반드시 AnalyzeStockSignalOutputSchema 형식에 맞춰주세요.
   `,
@@ -166,10 +170,7 @@ const analyzeStockSignalFlow = ai.defineFlow(
     outputSchema: AnalyzeStockSignalOutputSchema,
   },
   async (input) => {
-    // 입력 받은 티커를 대문자로 변환하는 것은 야후 파이낸스에서는 특정 경우 문제를 일으킬 수 있으므로,
-    // 원본 티커를 사용하거나, 야후 파이낸스에서 요구하는 형식에 맞게 처리하는 것이 좋습니다.
-    // 여기서는 원본 티커를 그대로 사용합니다.
-    const {output} = await prompt(input); // 티커는 사용자가 입력한 그대로 전달
+    const {output} = await prompt(input); 
     
     if (!output) {
         return {
