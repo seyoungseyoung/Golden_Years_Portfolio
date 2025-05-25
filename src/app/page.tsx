@@ -14,6 +14,7 @@ export default function HomePage() {
         height={200} 
         className="mb-8 rounded-lg shadow-lg"
         data-ai-hint="retirement relax"
+        unoptimized={true}
       />
       <h1 className="text-5xl font-bold text-primary mb-6">
         황금빛 노후 포트폴리오
@@ -41,7 +42,7 @@ export default function HomePage() {
         <FeatureCard
           icon={<Bell className="h-10 w-10 text-primary" />}
           title="최신 정보 확인"
-          description="시장 해설과 모의 포트폴리오 변경 사항을 통해 자신감 있는 결정을 내리세요."
+          description="시장 해설과 포트폴리오 변경 사항을 통해 자신감 있는 결정을 내리세요."
         />
       </div>
     </div>
