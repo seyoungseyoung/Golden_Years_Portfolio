@@ -13,7 +13,7 @@ export default function HomePage() {
         width={300} 
         height={200} 
         className="mb-8 rounded-lg shadow-lg"
-        data-ai-hint="retirement finance growth"
+        data-ai-hint="retirement relax"
       />
       <h1 className="text-5xl font-bold text-primary mb-6">
         황금빛 노후 포트폴리오
