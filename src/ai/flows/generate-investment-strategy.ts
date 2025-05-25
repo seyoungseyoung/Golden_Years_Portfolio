@@ -25,7 +25,7 @@ export type InvestmentStrategyInput = z.infer<typeof InvestmentStrategyInputSche
 
 const InvestmentStrategyOutputSchema = z.object({
   assetAllocation: z.string().describe('추천 자산 배분 비율 (주식/채권/현금/대안 투자).'),
-  etfRecommendations: z.string().describe('특정 ETF 또는 주식 추천.'),
+  etfRecommendations: z.string().describe("사용자의 프로필에 맞춰 추천하는 구체적인 ETF 또는 주식 예시 (가상 티커 및 추천 사유 포함). Markdown 형식을 사용하여 가독성을 높일 수 있습니다."),
   tradingStrategy: z.string().describe('추천 거래 전략 (예: 커버드 콜, 리밸런싱 규칙).'),
   explanation: z.string().describe('이 전략이 사용자에게 적합한 이유에 대한 설명.'),
   riskTolerance: z.string().describe('사용자가 입력한 위험 감수 수준 (예: 보수적, 보통, 공격적). 이 값은 입력된 값을 그대로 반환해야 합니다.'),
@@ -61,7 +61,10 @@ const prompt = ai.definePrompt({
 
   이러한 답변을 바탕으로 다음을 추천합니다:
   1.  자산 배분 (주식/채권/현금/대안 투자).
-  2.  특정 ETF 또는 주식 추천.
+  2.  특정 ETF 또는 주식 추천 (etfRecommendations):
+      *   사용자의 투자 테마 선호도 ({{{themePreference}}})와 위험 감수 수준 ({{{riskTolerance}}})을 고려하여, 2-3가지 구체적인 ETF 상품 예를 제시해주세요. 각 ETF에 대해 (가상) 티커 심볼과 함께 추천 이유를 간략히 설명해주세요. (예: KODEX 배당성장 (Ticker: 000001): 국내 배당 성장주에 투자하며 안정적인 현금 흐름을 추구합니다.)
+      *   만약 사용자의 프로필에 매우 적합하다고 판단될 경우, 1-2가지 개별 주식 예를 (가상) 티커 심볼과 함께 제시할 수 있습니다. 개별 주식 추천 시에는 '개별 주식 투자는 추가적인 깊이 있는 분석이 필요합니다'라는 주의 문구를 포함해주세요. (예: 삼성전자 (Ticker: 005930): 대표적인 우량주로 안정적 배당과 장기 성장 가능성이 있습니다. (주의: 개별 주식 투자는 추가적인 깊이 있는 분석이 필요합니다))
+      *   결과는 명확하게 구분되어 읽기 쉽게, 예를 들어 Markdown 불릿 포인트를 사용하여 작성해주세요. 이 추천은 예시이며 실제 투자 조언이 아님을 명심하세요.
   3.  거래 전략 (예: 커버드 콜, 리밸런싱 규칙).
   4.  이 전략이 사용자에게 적합한 이유에 대한 간략한 설명.
   5.  사용자가 입력한 위험 감수 수준 (riskTolerance 필드에 입력된 값을 그대로 포함).
