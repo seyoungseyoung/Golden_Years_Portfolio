@@ -13,15 +13,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { usePortfolio } from "@/contexts/PortfolioContext";
 import { handleAnalyzeStockSignalAction } from "@/app/dashboard/actions";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Search, Activity, TrendingUp, BarChartHorizontalBig, CheckSquare, LineChart } from "lucide-react";
+import { Loader2, Search, Activity, TrendingUp, BarChartHorizontalBig, CheckSquare, LineChart, Info } from "lucide-react";
 import type { AnalyzeStockSignalInput, AnalyzeStockSignalOutput } from "@/types";
-import { StockPriceChart } from "./StockPriceChart"; // 새로 추가될 차트 컴포넌트
+import { StockPriceChart } from "./StockPriceChart"; 
 
 const availableIndicators = [
-  { id: "BollingerBands", label: "볼린저 밴드" },
-  { id: "RSI", label: "RSI (상대강도지수)" },
-  { id: "MACD", label: "MACD (이동평균 수렴확산)" },
-  { id: "Volume", label: "거래량 분석" },
+  { id: "BollingerBands", label: "볼린저 밴드", icon: <Activity className="h-4 w-4 text-blue-500" /> },
+  { id: "RSI", label: "RSI (상대강도지수)", icon: <TrendingUp className="h-4 w-4 text-green-500" /> },
+  { id: "MACD", label: "MACD (이동평균 수렴확산)", icon: <BarChartHorizontalBig className="h-4 w-4 text-purple-500" /> },
+  { id: "Volume", label: "거래량 분석", icon: <CheckSquare className="h-4 w-4 text-orange-500" /> },
   // { id: "Stochastic", label: "스토캐스틱 오실레이터" }, // 추후 추가 가능
 ] as const;
 
@@ -90,14 +90,9 @@ export function StockSignalAnalyzer() {
     }
   }
 
-  const renderIndicatorIcon = (indicatorId: string) => {
-    switch(indicatorId.toLowerCase()) {
-      case 'bollingerbands': return <Activity className="h-4 w-4 text-blue-500" />;
-      case 'rsi': return <TrendingUp className="h-4 w-4 text-green-500" />;
-      case 'macd': return <BarChartHorizontalBig className="h-4 w-4 text-purple-500" />;
-      case 'volume': return <CheckSquare className="h-4 w-4 text-orange-500" />;
-      default: return <Activity className="h-4 w-4" />;
-    }
+  const getIndicatorIcon = (indicatorIdOrLabel: string) => {
+    const found = availableIndicators.find(ind => ind.id === indicatorIdOrLabel || ind.label === indicatorIdOrLabel);
+    return found ? found.icon : <Info className="h-4 w-4" />;
   }
 
   return (
@@ -124,7 +119,7 @@ export function StockSignalAnalyzer() {
                     <FormControl>
                       <Input placeholder="예: AAPL, MSFT, 005930 (삼성전자)" {...field} />
                     </FormControl>
-                    <FormDescription>분석할 주식의 티커 심볼을 입력하세요.</FormDescription>
+                    <FormDescription>분석할 주식의 티커 심볼을 입력하세요. (모의 데이터: AAPL, MSFT, GOOG, 005930.KS)</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -168,7 +163,7 @@ export function StockSignalAnalyzer() {
                                 />
                               </FormControl>
                               <FormLabel className="font-normal text-sm cursor-pointer flex items-center gap-2">
-                                {renderIndicatorIcon(item.id)} {item.label}
+                                {item.icon} {item.label}
                               </FormLabel>
                             </FormItem>
                           );
@@ -211,7 +206,7 @@ export function StockSignalAnalyzer() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
-            {analysisResult.chartData && analysisResult.chartData.length > 0 && (
+            {analysisResult.chartData && analysisResult.chartData.length > 0 ? (
               <div className="my-4">
                 <h3 className="text-lg font-semibold mb-2 text-foreground/90">주가 차트 (모의 데이터)</h3>
                 <StockPriceChart 
@@ -219,6 +214,8 @@ export function StockSignalAnalyzer() {
                   signalEvents={analysisResult.signalEvents || []} 
                 />
               </div>
+            ) : (
+              <p className="text-muted-foreground">차트 데이터를 불러올 수 없습니다.</p>
             )}
             <div>
               <h4 className="font-semibold text-foreground/90">매매 신호:</h4>
@@ -238,11 +235,18 @@ export function StockSignalAnalyzer() {
             {analysisResult.indicatorSummary && Object.keys(analysisResult.indicatorSummary).length > 0 && (
               <div>
                 <h4 className="font-semibold text-foreground/90 mt-3">지표별 요약:</h4>
-                <ul className="list-disc list-inside space-y-1 text-foreground/80">
-                  {Object.entries(analysisResult.indicatorSummary).map(([indicator, summary]) => {
-                     const foundIndicator = availableIndicators.find(i => i.id === indicator || i.label === indicator);
-                     const displayName = foundIndicator ? foundIndicator.label : indicator;
-                    return <li key={indicator}><strong>{displayName}:</strong> {summary}</li>;
+                <ul className="space-y-1 text-foreground/80">
+                  {Object.entries(analysisResult.indicatorSummary).map(([indicatorKey, summary]) => {
+                     const foundIndicator = availableIndicators.find(i => i.id === indicatorKey || i.label === indicatorKey);
+                     const displayName = foundIndicator ? foundIndicator.label : indicatorKey;
+                     const displayIcon = getIndicatorIcon(indicatorKey);
+                    return (
+                      <li key={indicatorKey} className="flex items-center gap-2 p-2 rounded-md border bg-card/50">
+                        {React.cloneElement(displayIcon, { className: "h-5 w-5" })} 
+                        <strong>{displayName}:</strong> 
+                        <span>{summary}</span>
+                      </li>
+                    );
                   }
                   )}
                 </ul>
@@ -257,3 +261,4 @@ export function StockSignalAnalyzer() {
     </div>
   );
 }
+
