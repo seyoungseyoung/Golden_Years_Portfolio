@@ -8,6 +8,9 @@ import type { AnalyzeStockSignalInput, AnalyzeStockSignalOutput as GenkitAnalyze
 export interface AnalyzeStockSignalOutput extends GenkitAnalyzeStockSignalOutput {
   chartData?: Array<{
     date: string;
+    open?: number;
+    high?: number;
+    low?: number;
     close: number;
     volume?: number;
   }>;
@@ -30,3 +33,4 @@ export type {
 };
 
 export interface QuestionnaireAnswers extends InvestmentStrategyInput {}
+

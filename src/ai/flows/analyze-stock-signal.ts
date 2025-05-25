@@ -34,7 +34,7 @@ const getStockDataTool = ai.defineTool(
           low: z.number().optional().describe('저가'),
           close: z.number().describe('종가'),
           adjClose: z.number().optional().describe('수정 종가'),
-          volume: z.number().describe('거래량'),
+          volume: z.number().optional().describe('거래량'),
         })
       ).describe('과거 가격 및 거래량 데이터 배열'),
       error: z.string().optional().describe('데이터 조회 중 오류 발생 시 메시지'),
@@ -85,7 +85,7 @@ const getStockDataTool = ai.defineTool(
     // --- 여기까지 실제 API 연동 예시 ---
 
     // --- 현재 사용하는 모의 데이터 ---
-    const mockDataStore: Record<string, Array<{date: string; open?: number; high?: number; low?: number; close: number; volume: number, adjClose?: number}>> = {
+    const mockDataStore: Record<string, Array<{date: string; open?: number; high?: number; low?: number; close: number; volume?: number, adjClose?: number}>> = {
       "AAPL": [
         {"date": "2024-06-01", "open": 190, "high": 192, "low": 189, "close": 191.5, "volume": 45000000},
         {"date": "2024-06-02", "open": 191, "high": 193, "low": 190, "close": 192.0, "volume": 50000000},
@@ -106,14 +106,33 @@ const getStockDataTool = ai.defineTool(
         {"date": "2024-07-09", "open": 210.0, "high": 212, "low": 208, "close": 211.5, "volume": 58000000},
         {"date": "2024-07-10", "open": 211.0, "high": 215, "low": 210, "close": 214.0, "volume": 65000000},
       ],
-      "MSFT": Array.from({length: 20}, (_, i) => ({ date: `2024-07-${String(i+1).padStart(2,'0')}`, close: 450 + i*Math.sin(i/2), volume: 20000000 + i*100000})),
-      "GOOG": Array.from({length: 20}, (_, i) => ({ date: `2024-07-${String(i+1).padStart(2,'0')}`, close: 180 + i*Math.cos(i/3), volume: 25000000 + i*120000})),
-      "005930.KS": Array.from({length: 20}, (_, i) => ({ date: `2024-07-${String(i+1).padStart(2,'0')}`, close: 80000 + i*100*Math.sin(i/2.5), volume: 10000000 + i*80000})),
+      "MSFT": Array.from({length: 20}, (_, i) => {
+        const baseClose = 450 + i * Math.sin(i / 2);
+        const openOffset = (Math.random() - 0.5) * 2 * (i % 3 + 1); // More variability for open
+        const open = parseFloat((baseClose - openOffset).toFixed(2));
+        const high = parseFloat((Math.max(baseClose, open) + Math.random() * 3).toFixed(2));
+        const low = parseFloat((Math.min(baseClose, open) - Math.random() * 3).toFixed(2));
+        return { date: `2024-07-${String(i+1).padStart(2,'0')}`, open, high, low, close: parseFloat(baseClose.toFixed(2)), volume: 20000000 + i*100000 + Math.floor(Math.random()*100000) };
+      }),
+      "GOOG": Array.from({length: 20}, (_, i) => {
+        const baseClose = 180 + i * Math.cos(i / 3);
+        const openOffset = (Math.random() - 0.5) * 1.5 * (i % 2 + 0.5);
+        const open = parseFloat((baseClose - openOffset).toFixed(2));
+        const high = parseFloat((Math.max(baseClose, open) + Math.random() * 2.5).toFixed(2));
+        const low = parseFloat((Math.min(baseClose, open) - Math.random() * 2.5).toFixed(2));
+        return { date: `2024-07-${String(i+1).padStart(2,'0')}`, open, high, low, close: parseFloat(baseClose.toFixed(2)), volume: 25000000 + i*120000 + Math.floor(Math.random()*120000) };
+      }),
+      "005930.KS": Array.from({length: 20}, (_, i) => {
+        const baseClose = 80000 + i*100*Math.sin(i/2.5);
+        const openOffset = (Math.random() - 0.5) * 200 * (i % 4 + 1);
+        const open = Math.floor(baseClose - openOffset);
+        const high = Math.floor(Math.max(baseClose, open) + Math.random() * 300);
+        const low = Math.floor(Math.min(baseClose, open) - Math.random() * 300);
+        return { date: `2024-07-${String(i+1).padStart(2,'0')}`, open, high, low, close: Math.floor(baseClose), volume: 10000000 + i*80000 + Math.floor(Math.random()*80000) };
+      }),
     };
     const tickerUpper = ticker.toUpperCase();
     if (mockDataStore[tickerUpper]) {
-      // 실제 API라면 period1, period2, interval에 따라 필터링/가공해야 합니다.
-      // 여기서는 단순화를 위해 저장된 모든 데이터를 반환합니다.
       return {prices: mockDataStore[tickerUpper]};
     }
     return {prices: [], error: `티커 '${ticker}'에 대한 모의 데이터를 찾을 수 없습니다.`};
@@ -137,10 +156,13 @@ const AnalyzeStockSignalOutputSchema = z.object({
   chartData: z.array(
     z.object({
       date: z.string().describe("날짜 (YYYY-MM-DD)"),
+      open: z.number().optional().describe("시가"),
+      high: z.number().optional().describe("고가"),
+      low: z.number().optional().describe("저가"),
       close: z.number().describe("종가"),
       volume: z.number().optional().describe("거래량"),
     })
-  ).optional().describe("차트 표시에 사용될 과거 주가 데이터 (종가 및 거래량). getStockDataTool에서 받은 데이터를 기반으로 제공."),
+  ).optional().describe("차트 표시에 사용될 과거 주가 데이터 (날짜, 시가, 고가, 저가, 종가 및 거래량). getStockDataTool에서 받은 데이터를 기반으로 제공."),
   signalEvents: z.array(
     z.object({
       date: z.string().describe("신호 발생 날짜 (YYYY-MM-DD). chartData에 포함된 날짜여야 함."),
@@ -180,8 +202,8 @@ const prompt = ai.definePrompt({
       *   이 분석은 모의 데이터에 기반한 것이며, 실제 투자 결정은 신중해야 함을 다시 한번 강조해주세요.
   3.  **확신 수준 (confidence, 선택 사항)**: 신호에 대한 당신의 확신 수준 (높음, 중간, 낮음)
   4.  **지표별 요약 (indicatorSummary, 선택 사항)**: 각 선택된 지표가 나타내는 간략한 신호 또는 상태를 객체 형태로 제공해주세요. (예: {"RSI": "과매도 (28.5)", "BollingerBands": "하단 근접", "MACD": "데드 크로스 발생"})
-  5.  **차트 데이터 (chartData)**: getStockData 도구에서 반환된 과거 주가 데이터 중 모든 날짜(date)와 해당 날짜의 종가(close), 그리고 거래량(volume)을 포함하는 배열을 그대로 제공해주세요. 이 데이터는 차트 표시에 사용됩니다.
-  6.  **신호 이벤트 (signalEvents)**: 분석 결과, 차트 상에 화살표로 표시할 만한 주요 매수(buy), 매도(sell) 또는 관망(hold) 신호가 발생했다고 판단되는 지점을 날짜(date), 신호 유형(type: 'buy'|'sell'|'hold'), 당시 종가(price), 그리고 해당 신호를 판단하게 된 주요 지표 또는 근거(indicator, 선택적)와 함께 배열로 제공해주세요. 최대 3-5개의 주요 이벤트를 선정하고, 날짜는 제공된 chartData 내의 실제 날짜여야 하며, 가격은 해당 날짜의 종가여야 합니다. (예: [{"date": "2024-07-05", "type": "buy", "price": 207.0, "indicator": "RSI 과매도 및 볼린저밴드 하단 터치"}, {"date": "2024-07-10", "type": "sell", "price": 214.0, "indicator": "단기 급등에 따른 저항선 도달"}])
+  5.  **차트 데이터 (chartData)**: getStockData 도구에서 반환된 과거 주가 데이터 중 모든 날짜(date)와 해당 날짜의 시가(open), 고가(high), 저가(low), 종가(close), 그리고 거래량(volume)을 포함하는 배열을 그대로 제공해주세요. 이 데이터는 차트 표시에 사용됩니다. 데이터가 없다면 빈 배열로 제공해주세요.
+  6.  **신호 이벤트 (signalEvents)**: 분석 결과, 차트 상에 화살표로 표시할 만한 주요 매수(buy), 매도(sell) 또는 관망(hold) 신호가 발생했다고 판단되는 지점을 날짜(date), 신호 유형(type: 'buy'|'sell'|'hold'), 당시 종가(price), 그리고 해당 신호를 판단하게 된 주요 지표 또는 근거(indicator, 선택적)와 함께 배열로 제공해주세요. 최대 3-5개의 주요 이벤트를 선정하고, 날짜는 제공된 chartData 내의 실제 날짜여야 하며, 가격은 해당 날짜의 종가여야 합니다. (예: [{"date": "2024-07-05", "type": "buy", "price": 207.0, "indicator": "RSI 과매도 및 볼린저밴드 하단 터치"}, {"date": "2024-07-10", "type": "sell", "price": 214.0, "indicator": "단기 급등에 따른 저항선 도달"}]) 데이터가 없다면 빈 배열로 제공해주세요.
 
   만약 데이터가 부족하거나 분석이 어렵다면, "분석 불가" 또는 "데이터 부족"으로 명확히 답변하고, chartData와 signalEvents는 빈 배열로 설정해주세요.
   결과는 반드시 AnalyzeStockSignalOutputSchema 형식에 맞춰주세요.
@@ -222,3 +244,4 @@ const analyzeStockSignalFlow = ai.defineFlow(
     return output;
   }
 );
+
