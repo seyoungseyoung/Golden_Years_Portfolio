@@ -1,3 +1,4 @@
+// src/app/questionnaire/actions.ts
 "use server";
 
 import { generateInvestmentStrategy, type InvestmentStrategyInput, type InvestmentStrategyOutput } from '@/ai/flows/generate-investment-strategy';
@@ -10,6 +11,7 @@ const QuestionnaireFormSchema = z.object({
   assetSize: z.string().min(1, "자산 규모는 필수 항목입니다."),
   taxSensitivity: z.string().min(1, "세금 민감도는 필수 항목입니다."),
   themePreference: z.string().min(1, "투자 테마 선호도는 필수 항목입니다."),
+  investmentRegionPreference: z.string().min(1, "투자 지역 선호도는 필수 항목입니다."), // 새로 추가된 필드
   managementStyle: z.string().min(1, "관리 스타일은 필수 항목입니다."),
   otherAssets: z.string().optional(), // Optional, can be empty
   riskTolerance: z.string().min(1, "위험 감수 수준은 필수 항목입니다."),
