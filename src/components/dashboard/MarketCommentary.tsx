@@ -90,8 +90,17 @@ export function MarketCommentary() {
                 )}
               />
               <Button type="submit" className="w-full bg-accent text-accent-foreground hover:bg-accent/90" disabled={isSubmitting || !strategy}>
-                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Zap className="mr-2 h-4 w-4" />}
-                AI 인사이트 받기
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    AI 분석 요청 중...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="mr-2 h-4 w-4" />
+                    AI 인사이트 받기
+                  </>
+                )}
               </Button>
               {!strategy && <p className="text-sm text-destructive text-center mt-2">시장 인사이트를 활성화하려면 먼저 투자 전략을 생성해주세요.</p>}
             </form>
