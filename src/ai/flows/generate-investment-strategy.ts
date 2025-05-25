@@ -28,11 +28,18 @@ const InvestmentStrategyOutputSchema = z.object({
   etfRecommendations: z.string().describe('특정 ETF 또는 주식 추천.'),
   tradingStrategy: z.string().describe('추천 거래 전략 (예: 커버드 콜, 리밸런싱 규칙).'),
   explanation: z.string().describe('이 전략이 사용자에게 적합한 이유에 대한 설명.'),
+  riskTolerance: z.string().describe('사용자가 입력한 위험 감수 수준 (예: 보수적, 보통, 공격적). 이 값은 입력된 값을 그대로 반환해야 합니다.'),
 });
 export type InvestmentStrategyOutput = z.infer<typeof InvestmentStrategyOutputSchema>;
 
 export async function generateInvestmentStrategy(input: InvestmentStrategyInput): Promise<InvestmentStrategyOutput> {
-  return generateInvestmentStrategyFlow(input);
+  // AI 플로우 호출 시 입력값에 있는 riskTolerance가 출력 스키마에도 포함되도록 유도
+  const result = await generateInvestmentStrategyFlow(input);
+  // 만약 AI가 riskTolerance를 반환하지 않았다면 입력값으로 채워주는 방어 로직 (필요 시)
+  if (!result.riskTolerance && input.riskTolerance) {
+    return { ...result, riskTolerance: input.riskTolerance };
+  }
+  return result;
 }
 
 const prompt = ai.definePrompt({
@@ -41,7 +48,7 @@ const prompt = ai.definePrompt({
   output: {schema: InvestmentStrategyOutputSchema},
   prompt: `당신은 사용자 프로필을 기반으로 맞춤형 투자 전략을 제공하는 전문 금융 자문가입니다.
 
-  다음 질문에 대한 사용자 답변을 분석하여 적절한 투자 전략을 생성하십시오.
+  다음 질문에 대한 사용자 답변을 분석하여 적절한 투자 전략을 InvestmentStrategyOutputSchema 형식에 맞춰 생성하십시오.
 
   은퇴 시기: {{{retirementHorizon}}}
   현금 흐름 필요성: {{{cashFlowNeeds}}}
@@ -57,8 +64,9 @@ const prompt = ai.definePrompt({
   2.  특정 ETF 또는 주식 추천.
   3.  거래 전략 (예: 커버드 콜, 리밸런싱 규칙).
   4.  이 전략이 사용자에게 적합한 이유에 대한 간략한 설명.
+  5.  사용자가 입력한 위험 감수 수준 (riskTolerance 필드에 입력된 값을 그대로 포함).
 
-  명확하고 간결하게 답변을 작성하십시오.
+  명확하고 간결하게 답변을 작성하십시오. 결과는 반드시 InvestmentStrategyOutputSchema 형식에 맞춰야 합니다.
   `,
 });
 
@@ -70,6 +78,10 @@ const generateInvestmentStrategyFlow = ai.defineFlow(
   },
   async input => {
     const {output} = await prompt(input);
+    // AI가 riskTolerance를 생성하지 않았을 경우를 대비해 입력값을 사용
+    if (output && !output.riskTolerance && input.riskTolerance) {
+      return { ...output, riskTolerance: input.riskTolerance };
+    }
     return output!;
   }
 );
