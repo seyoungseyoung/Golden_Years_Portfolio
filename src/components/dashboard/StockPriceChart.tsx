@@ -4,16 +4,14 @@
 import React from 'react';
 import {
   ResponsiveContainer,
-  LineChart,
-  Line,
+  ComposedChart, // Changed from LineChart
+  Bar, // For candlestick body
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   Legend,
   ReferenceDot,
-  BarChart,
-  Bar,
 } from 'recharts';
 import { ArrowUpCircle, ArrowDownCircle, MinusCircle } from 'lucide-react';
 import type { AnalyzeStockSignalOutput } from '@/types';
@@ -21,15 +19,64 @@ import type { AnalyzeStockSignalOutput } from '@/types';
 type StockDataPoint = AnalyzeStockSignalOutput['chartData'] extends (infer U)[] ? U : never;
 type SignalEvent = AnalyzeStockSignalOutput['signalEvents'] extends (infer U)[] ? U : never;
 
-interface StockPriceChartProps {
-  chartData: StockDataPoint[];
-  signalEvents: SignalEvent[];
-}
+// Custom shape for Candlestick
+const Candlestick = (props: any) => {
+  const { x, y, width, height, payload, yAxis } = props; // y and height are for the nominal dataKey "close"
+
+  if (!payload || 
+      typeof payload.open !== 'number' || 
+      typeof payload.close !== 'number' || 
+      typeof payload.high !== 'number' || 
+      typeof payload.low !== 'number') {
+    return null; // Don't render if OHLC data is incomplete
+  }
+
+  const { open: actualOpen, close: actualClose, high: actualHigh, low: actualLow } = payload;
+
+  const yOpen = yAxis.scale(actualOpen);
+  const yClose = yAxis.scale(actualClose);
+  const yHigh = yAxis.scale(actualHigh);
+  const yLow = yAxis.scale(actualLow);
+
+  const isRising = actualClose >= actualOpen;
+  const bodyFill = isRising ? 'hsl(var(--chart-2))' : 'hsl(var(--destructive))';
+  const wickStroke = 'hsl(var(--foreground))';
+
+  const candleX = x; // x from props is the left edge of the bar slot
+
+  // Wick (thin line from high to low)
+  const wickCenterX = candleX + width / 2;
+
+  // Body (rectangle from open to close)
+  const bodyTopY = Math.min(yOpen, yClose);
+  const bodyHeight = Math.max(1, Math.abs(yOpen - yClose)); // Ensure minimum 1px height for doji-like candles
+
+  return (
+    <g>
+      {/* Wick */}
+      <line
+        x1={wickCenterX}
+        y1={yHigh}
+        x2={wickCenterX}
+        y2={yLow}
+        stroke={wickStroke}
+        strokeWidth={1}
+      />
+      {/* Body */}
+      <rect
+        x={candleX}
+        y={bodyTopY}
+        width={width}
+        height={bodyHeight}
+        fill={bodyFill}
+      />
+    </g>
+  );
+};
+
 
 const YAxisPriceTickFormatter = (value: number) => {
   if (value === null || value === undefined) return '';
-  if (Math.abs(value) >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-  if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(0)}k`;
   return value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2});
 };
 
@@ -42,27 +89,20 @@ const YAxisVolumeTickFormatter = (value: number) => {
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
-    const data = payload[0].payload as StockDataPoint & { event?: SignalEvent };
+    const data = payload[0].payload as StockDataPoint & { event?: SignalEvent }; // payload[0].payload contains the original data item
+    
     return (
       <div className="p-2 bg-background/90 border border-border rounded-md shadow-lg text-xs">
         <p className="font-semibold text-foreground">{`날짜: ${label}`}</p>
-        {data.open !== undefined && <p style={{ color: 'hsl(var(--foreground))' }}>시가: {YAxisPriceTickFormatter(data.open)}</p>}
-        {data.high !== undefined && <p style={{ color: 'hsl(var(--chart-2))' }}>고가: {YAxisPriceTickFormatter(data.high)}</p>}
-        {data.low !== undefined && <p style={{ color: 'hsl(var(--destructive))' }}>저가: {YAxisPriceTickFormatter(data.low)}</p>}
-        {payload.map((pld: any, index: number) => {
-          // Only render close and volume from the main payload array to avoid duplication if OHLC are also graphed directly
-          if (pld.dataKey === 'close' || pld.dataKey === 'volume') {
-            return (
-              <p key={index} style={{ color: pld.color }}>
-                {`${pld.name}: ${
-                  pld.dataKey === 'volume' && typeof pld.value === 'number'
-                    ? YAxisVolumeTickFormatter(pld.value) 
-                    : typeof pld.value === 'number' ? YAxisPriceTickFormatter(pld.value) : pld.value}`}
-              </p>
-            )
-          }
-          return null;
-        })}
+        {typeof data.open === 'number' && <p style={{ color: 'hsl(var(--foreground))' }}>시가: {YAxisPriceTickFormatter(data.open)}</p>}
+        {typeof data.high === 'number' && <p style={{ color: 'hsl(var(--chart-2))' }}>고가: {YAxisPriceTickFormatter(data.high)}</p>}
+        {typeof data.low === 'number' && <p style={{ color: 'hsl(var(--destructive))' }}>저가: {YAxisPriceTickFormatter(data.low)}</p>}
+        {typeof data.close === 'number' && <p style={{ color: 'hsl(var(--primary))' }}>종가: {YAxisPriceTickFormatter(data.close)}</p>}
+        {typeof data.volume === 'number' && (
+            <p style={{ color: 'hsl(var(--chart-4))' }}>
+            거래량: {YAxisVolumeTickFormatter(data.volume)}
+            </p>
+        )}
         {data.event && (
            <p className={`mt-1 font-semibold ${
             data.event.type === 'buy' ? 'text-green-500' :
@@ -91,12 +131,12 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
       event: eventOnDate 
     };
   });
-
-  const pricesForDomain = chartData.flatMap(d => [d.open, d.high, d.low, d.close]).filter(p => typeof p === 'number') as number[];
+  
+  const pricesForDomain = chartData.flatMap(d => [d.open, d.high, d.low, d.close])
+    .filter(p => typeof p === 'number') as number[];
   
   let calculatedYMin = pricesForDomain.length > 0 ? Math.min(...pricesForDomain) : 0;
   let calculatedYMax = pricesForDomain.length > 0 ? Math.max(...pricesForDomain) : 1;
-
 
   if (calculatedYMin === calculatedYMax) {
     const spread = Math.abs(calculatedYMin * 0.05) || 1; 
@@ -104,33 +144,31 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
     calculatedYMax += spread;
   } else {
     const range = calculatedYMax - calculatedYMin;
-    calculatedYMin -= range * 0.05;
-    calculatedYMax += range * 0.05;
+    calculatedYMin -= range * 0.05; // Add 5% padding below min
+    calculatedYMax += range * 0.05; // Add 5% padding above max
   }
  
-  if (calculatedYMin > calculatedYMax) {
+  if (calculatedYMin > calculatedYMax) { // Should not happen if logic is correct
       const temp = calculatedYMin;
       calculatedYMin = calculatedYMax;
       calculatedYMax = temp;
-      if (calculatedYMin === calculatedYMax) { // Should not happen if spread logic is correct
-          calculatedYMin -= 0.5;
-          calculatedYMax += 0.5;
-      }
+  }
+  if (calculatedYMin === calculatedYMax) { // Final fallback
+      calculatedYMin -= 0.5;
+      calculatedYMax += 0.5;
   }
 
-
-  const yMinPriceDomain = Math.floor(calculatedYMin); // Use Math.floor/ceil for cleaner ticks
-  const yMaxPriceDomain = Math.ceil(calculatedYMax);
-
+  const yMinPriceDomain = calculatedYMin;
+  const yMaxPriceDomain = calculatedYMax;
 
   const volumeData = chartData.filter(d => d.volume !== undefined && d.volume !== null && typeof d.volume === 'number').map(d => d.volume as number);
-  const yVolumeMax = volumeData.length > 0 ? Math.max(...volumeData) * 1.2 : 1; 
-
+  const yVolumeMax = volumeData.length > 0 ? Math.max(...volumeData) * 1.5 : 1; // Increased padding for volume axis
 
   return (
     <div style={{ width: '100%', height: 450 }}>
+      {/* Price Chart (Candlestick) */}
       <ResponsiveContainer width="100%" height="70%">
-        <LineChart data={dataWithSignals} margin={{ top: 5, right: 30, left: 5, bottom: 5 }}> 
+        <ComposedChart data={dataWithSignals} margin={{ top: 5, right: 30, left: 5, bottom: 5 }}> 
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
           <XAxis 
             dataKey="date" 
@@ -148,25 +186,20 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
             tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
             width={60} 
             allowDataOverflow={false}
+            orientation="left"
           />
           <Tooltip content={<CustomTooltip />} />
           <Legend wrapperStyle={{ fontSize: '12px' }} />
-          <Line 
-            yAxisId="left"
-            type="monotone" 
-            dataKey="close" 
-            name="종가" 
-            stroke="hsl(var(--primary))" 
-            strokeWidth={2} 
-            dot={false} 
-            activeDot={{ r: 6 }} 
-          />
+          
+          {/* Candlestick Series: dataKey is nominal, shape does the work */}
+          <Bar yAxisId="left" dataKey="close" name="주가" shape={<Candlestick />} />
+
           {signalEvents.map((event, index) => (
             <ReferenceDot
               key={`event-${index}`}
               yAxisId="left"
               x={event.date}
-              y={event.price} // This price is the close price on the event date
+              y={event.price} 
               r={8} 
               fill={event.type === 'buy' ? 'hsl(var(--chart-2))' : event.type === 'sell' ? 'hsl(var(--destructive))' : 'hsl(var(--chart-3))'}
               stroke="hsl(var(--background))"
@@ -180,11 +213,13 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
               </foreignObject>
             </ReferenceDot>
           ))}
-        </LineChart>
+        </ComposedChart>
       </ResponsiveContainer>
+
+      {/* Volume Chart */}
       {volumeData.length > 0 && (
         <ResponsiveContainer width="100%" height="30%">
-            <BarChart data={dataWithSignals} margin={{ top: 10, right: 30, left: 5, bottom: 5 }}> 
+            <BarChart data={dataWithSignals} margin={{ top: 10, right: 30, left: 5, bottom: 20 }}> 
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false}/>
             <XAxis 
                 dataKey="date" 
@@ -192,11 +227,11 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
                 tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                 axisLine={false}
                 tickLine={false}
-                height={20}
+                height={20} // Adjusted height for bottom chart X-axis
                 interval="preserveStartEnd"
             />
             <YAxis 
-                yAxisId="right" 
+                yAxisId="rightVolume" // Unique yAxisId for volume
                 orientation="left" 
                 domain={[0, yVolumeMax]} 
                 tickFormatter={YAxisVolumeTickFormatter}
@@ -206,11 +241,10 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
                 tickLine={false}
             />
             <Tooltip content={<CustomTooltip />}/>
-            <Bar yAxisId="right" dataKey="volume" name="거래량" fill="hsl(var(--chart-4))" opacity={0.6} barSize={10} />
+            <Bar yAxisId="rightVolume" dataKey="volume" name="거래량" fill="hsl(var(--chart-4))" opacity={0.6} barSize={10} />
             </BarChart>
         </ResponsiveContainer>
       )}
     </div>
   );
 }
-
