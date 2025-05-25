@@ -8,7 +8,7 @@ export default function HomePage() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-150px)] text-center">
       <Image 
-        src="https://i.ibb.co/qPG7b5N/golden-years.jpg" 
+        src="https://i.imgur.com/SJGfF7O.jpg" 
         alt="황금빛 노후 포트폴리오 일러스트" 
         width={300} 
         height={200} 
