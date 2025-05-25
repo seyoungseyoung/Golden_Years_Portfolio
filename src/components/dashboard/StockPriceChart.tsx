@@ -23,23 +23,23 @@ type SignalEvent = AnalyzeStockSignalOutput['signalEvents'] extends (infer U)[] 
 
 // Custom shape for Candlestick
 const Candlestick = (props: any) => {
-  const { x, y, width, height, payload, yAxis, index } = props; 
+  const { x, y, width, height, payload, yAxis, index, dataKey } = props; // Added dataKey for context
 
-  // For debugging the first few candles:
-  if (index < 5) { // Log first 5 candles
-    console.log(`Candle ${index} Props:`, { x, y, width, height, payload });
-    if(yAxis && typeof yAxis.scale === 'function' && payload) {
-      console.log(`Candle ${index} Scaled:`, {
-        open: payload.open, scaledOpen: yAxis.scale(payload.open),
-        close: payload.close, scaledClose: yAxis.scale(payload.close),
-        high: payload.high, scaledHigh: yAxis.scale(payload.high),
-        low: payload.low, scaledLow: yAxis.scale(payload.low),
-      });
+  // Detailed logging for the first few candles
+  if (index < 5) {
+    console.log(`Candlestick[${index}] PROPS: x=${x}, y=${y}, width=${width}, height=${height}, dataKey=${dataKey}`);
+    console.log(`Candlestick[${index}] PAYLOAD:`, payload);
+    if (yAxis && typeof yAxis.scale === 'function' && payload &&
+        typeof payload.open === 'number' && typeof payload.close === 'number' &&
+        typeof payload.high === 'number' && typeof payload.low === 'number') {
+      console.log(`Candlestick[${index}] SCALED: open=${yAxis.scale(payload.open)}, close=${yAxis.scale(payload.close)}, high=${yAxis.scale(payload.high)}, low=${yAxis.scale(payload.low)}`);
+    } else {
+      console.warn(`Candlestick[${index}]: Invalid payload or yAxis.scale for scaling. yAxis:`, yAxis, `Payload:`, payload);
     }
   }
 
   if (!yAxis || typeof yAxis.scale !== 'function') {
-    // console.warn('Candlestick: yAxis or yAxis.scale is not available.', {yAxis});
+    if (index < 1) console.warn('Candlestick: yAxis or yAxis.scale is not available.', {yAxis});
     return null; 
   }
 
@@ -48,15 +48,14 @@ const Candlestick = (props: any) => {
       typeof payload.close !== 'number' || 
       typeof payload.high !== 'number' || 
       typeof payload.low !== 'number') {
-    // console.warn('Candlestick: Invalid OHLC data in payload.', {payload});
+    if (index < 1) console.warn('Candlestick: Invalid OHLC data in payload.', {payload});
     return null; 
   }
 
   const { open: actualOpen, close: actualClose, high: actualHigh, low: actualLow } = payload;
 
-  // Ensure OHLC values are finite numbers
   if (![actualOpen, actualClose, actualHigh, actualLow].every(val => Number.isFinite(val))) {
-    // console.warn('Candlestick: Non-finite OHLC values.', {payload});
+    if (index < 1) console.warn('Candlestick: Non-finite OHLC values in payload.', {payload});
     return null;
   }
   
@@ -65,23 +64,32 @@ const Candlestick = (props: any) => {
   const yHigh = yAxis.scale(actualHigh);
   const yLow = yAxis.scale(actualLow);
 
-  // Ensure scaled values are finite
   if (![yOpen, yClose, yHigh, yLow].every(val => Number.isFinite(val))) {
-    // console.warn('Candlestick: Non-finite scaled Y values.', { yOpen, yClose, yHigh, yLow, actualOpen, actualClose, actualHigh, actualLow });
+    if (index < 1) console.warn('Candlestick: Non-finite scaled Y values.', { yOpen, yClose, yHigh, yLow, actualOpen, actualClose, actualHigh, actualLow });
     return null;
   }
 
+  // Ensure width and height are positive for drawing
+  if (width <= 0 || Math.abs(yOpen - yClose) <= 0 && Math.abs(yHigh - yLow) <=0 ) { // if body and wick have no height
+     if (index < 5) console.warn(`Candlestick[${index}]: Zero or negative width/height. width=${width}, yOpen=${yOpen}, yClose=${yClose}`);
+    // return null; // Don't return null for zero height body if wick exists
+  }
+
+
   const isRising = actualClose >= actualOpen;
-  const bodyFill = isRising ? 'hsl(var(--chart-2))' : 'hsl(var(--destructive))'; // Green for rising, Red for falling
+  const bodyFill = isRising ? 'hsl(var(--chart-2))' : 'hsl(var(--destructive))'; 
   const wickStroke = 'hsl(var(--foreground))'; 
 
-  const candleWidth = Math.max(1, width); 
+  // Ensure candleWidth is at least 1 to be visible
+  const candleWidth = Math.max(1, width * 0.8); // Use 80% of available width, minimum 1px
   const candleX = x + (width - candleWidth) / 2; 
 
   const wickCenterX = candleX + candleWidth / 2;
 
   const bodyTopY = Math.min(yOpen, yClose);
-  const bodyHeight = Math.max(1, Math.abs(yOpen - yClose));
+  // Ensure bodyHeight is at least 1 if open and close are different, otherwise can be 0 (doji)
+  const bodyHeight = Math.max(actualOpen !== actualClose ? 1 : 0, Math.abs(yOpen - yClose));
+
 
   return (
     <g>
@@ -158,10 +166,11 @@ interface StockPriceChartProps {
 
 export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProps) {
   if (!chartData || chartData.length === 0) {
-    return <p className="text-muted-foreground">차트 데이터를 불러올 수 없습니다.</p>;
+    console.log("StockPriceChart: chartData is empty or null.");
+    return <p className="text-muted-foreground">차트 데이터를 불러올 수 없습니다. AI 분석 결과에서 chartData가 비어있을 수 있습니다.</p>;
   }
-  // console.log("StockPriceChart received chartData (first 5):", chartData.slice(0,5));
-  // console.log("StockPriceChart received signalEvents:", signalEvents);
+  console.log(`StockPriceChart: Received chartData (length: ${chartData.length}). First 3 items:`, chartData.slice(0,3));
+  console.log(`StockPriceChart: Received signalEvents (length: ${signalEvents.length}):`, signalEvents);
 
 
   const dataWithSignals = chartData.map(point => {
@@ -179,43 +188,63 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
   let yMin = pricesForDomain.length > 0 ? Math.min(...pricesForDomain) : 0;
   let yMax = pricesForDomain.length > 0 ? Math.max(...pricesForDomain) : 1;
 
+  if (!isFinite(yMin) || !isFinite(yMax)) { // Fallback if min/max are not finite
+      console.warn("StockPriceChart: Non-finite yMin/yMax calculated initially.", { yMin, yMax });
+      yMin = 0; yMax = 1;
+      if (pricesForDomain.length > 0) {
+          const typicalPrice = pricesForDomain.find(p => isFinite(p)) || 1;
+          yMin = typicalPrice * 0.5;
+          yMax = typicalPrice * 1.5;
+      }
+  }
+  
   if (yMin === yMax) {
     const spread = Math.max(1, Math.abs(yMin * 0.1)); 
     yMin -= spread;
     yMax += spread;
   } else {
     const range = yMax - yMin;
-    yMin -= range * 0.05; 
-    yMax += range * 0.05; 
+    // Ensure a minimum visible range, especially for very small ranges
+    const minRange = Math.max(1, Math.abs(yMax * 0.02)); // Minimum 2% of max value or 1 unit
+    if (range < minRange) {
+        const mid = (yMin + yMax) / 2;
+        yMin = mid - minRange / 2;
+        yMax = mid + minRange / 2;
+    } else {
+        yMin -= range * 0.05; 
+        yMax += range * 0.05; 
+    }
   }
  
+  // Final check for sanity
   if (!isFinite(yMin) || !isFinite(yMax) || yMin >= yMax) {
-      // console.warn("Invalid Y-axis domain calculated:", {yMin, yMax, pricesForDomain});
-      yMin = 0;
-      yMax = 1;
-      if (pricesForDomain.length > 0) {
-        const typicalPrice = pricesForDomain[Math.floor(pricesForDomain.length / 2)];
-        yMin = typicalPrice * 0.8;
-        yMax = typicalPrice * 1.2;
-        if (yMin >= yMax || !isFinite(yMin) || !isFinite(yMax)) { // Final fallback
-             yMin = 0; yMax = (typicalPrice || 1) * 2;
-        }
+      console.warn("StockPriceChart: Invalid Y-axis domain after adjustments.", {yMin, yMax});
+      const typicalPrice = pricesForDomain.find(p => isFinite(p)) || 100; // Default typical price
+      yMin = typicalPrice * 0.8;
+      yMax = typicalPrice * 1.2;
+      if (yMin >= yMax || !isFinite(yMin) || !isFinite(yMax)) { // Final final fallback
+           yMin = 0; yMax = (typicalPrice || 1) * 2;
       }
   }
+  console.log("StockPriceChart: Y-axis Price Domain:", { yMin, yMax });
 
 
   const yMinPriceDomain = yMin;
   const yMaxPriceDomain = yMax;
 
-  const volumeData = chartData.filter(d => d.volume !== undefined && d.volume !== null && typeof d.volume === 'number').map(d => d.volume as number);
+  const volumeData = chartData.filter(d => d.volume !== undefined && d.volume !== null && typeof d.volume === 'number' && isFinite(d.volume)).map(d => d.volume as number);
   const yVolumeMax = volumeData.length > 0 ? Math.max(...volumeData) * 1.5 : 1;
 
   let xAxisTickInterval: "preserveStartEnd" | number = "preserveStartEnd";
-  if (chartData.length > 150) {
-    xAxisTickInterval = Math.floor(chartData.length / 12); 
-  } else if (chartData.length > 30) {
-    xAxisTickInterval = Math.floor(chartData.length / 4); 
+  const numDataPoints = chartData.length;
+  if (numDataPoints > 200) { // Approx 1 year daily data
+    xAxisTickInterval = Math.floor(numDataPoints / 12); // Roughly monthly ticks
+  } else if (numDataPoints > 60) { // Approx 3 months daily data
+    xAxisTickInterval = Math.floor(numDataPoints / 8); // Roughly bi-weekly/tri-weekly
+  } else if (numDataPoints > 20) { // Approx 1 month daily data
+    xAxisTickInterval = Math.floor(numDataPoints / 4); // Roughly weekly
   }
+  // For very few data points, preserveStartEnd is better.
 
 
   return (
@@ -240,11 +269,13 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
             width={60} 
             allowDataOverflow={false} 
             orientation="left"
+            scale="linear" // Explicitly set scale
           />
           <Tooltip content={<CustomTooltip />} />
           <Legend wrapperStyle={{ fontSize: '12px' }} />
           
-          <Bar yAxisId="left" dataKey="close" name="주가" shape={<Candlestick />} /> {/* barSize removed for auto-calculation */}
+          {/* Using dataKey="close" but shape will use full payload. Name is for Legend */}
+          <Bar yAxisId="left" dataKey="close" name="주가" shape={<Candlestick />} />
 
           {signalEvents.map((event, index) => (
             <ReferenceDot
@@ -290,9 +321,10 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
                 width={60} 
                 axisLine={false}
                 tickLine={false}
+                scale="linear" // Explicitly set scale
             />
             <Tooltip content={<CustomTooltip />}/>
-            <Bar yAxisId="rightVolume" dataKey="volume" name="거래량" fill="hsl(var(--chart-4))" opacity={0.6} /> {/* barSize removed */}
+            <Bar yAxisId="rightVolume" dataKey="volume" name="거래량" fill="hsl(var(--chart-4))" opacity={0.6} />
             </ComposedChart>
         </ResponsiveContainer>
       )}
