@@ -100,11 +100,11 @@ export function StockSignalAnalyzer() {
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="text-2xl text-primary flex items-center gap-2">
-            <Search /> AI 주식 매매 타이밍 분석 (모의)
+            <Search /> AI 주식 매매 타이밍 분석
           </CardTitle>
           <CardDescription>
             주식 티커와 기술 지표를 선택하여 AI 기반 매매 신호 분석을 받아보세요. 
-            <strong className="text-destructive-foreground bg-destructive/80 px-1 rounded">이 기능은 모의 데이터를 사용하며, 실제 투자 조언이 아닙니다.</strong>
+            <strong className="text-destructive-foreground bg-destructive/80 px-1 rounded">이 분석은 투자 참고용이며, 실제 투자 결정은 신중한 판단 하에 이루어져야 합니다.</strong>
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -117,9 +117,9 @@ export function StockSignalAnalyzer() {
                   <FormItem>
                     <FormLabel className="text-lg">주식 티커</FormLabel>
                     <FormControl>
-                      <Input placeholder="예: AAPL, MSFT, 005930 (삼성전자)" {...field} />
+                      <Input placeholder="예: AAPL, MSFT, 005930.KS (삼성전자)" {...field} />
                     </FormControl>
-                    <FormDescription>분석할 주식의 티커 심볼을 입력하세요. (모의 데이터: AAPL, MSFT, GOOG, 005930.KS)</FormDescription>
+                    <FormDescription>분석할 주식의 티커 심볼을 입력하세요. (예: AAPL, MSFT, GOOG, 005930.KS)</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -208,14 +208,14 @@ export function StockSignalAnalyzer() {
           <CardContent className="space-y-4 text-sm">
             {analysisResult.chartData && analysisResult.chartData.length > 0 ? (
               <div className="my-4">
-                <h3 className="text-lg font-semibold mb-2 text-foreground/90">주가 차트 (모의 데이터)</h3>
+                <h3 className="text-lg font-semibold mb-2 text-foreground/90">주가 차트</h3>
                 <StockPriceChart 
                   chartData={analysisResult.chartData} 
                   signalEvents={analysisResult.signalEvents || []} 
                 />
               </div>
             ) : (
-              <p className="text-muted-foreground">차트 데이터를 불러올 수 없습니다.</p>
+              <p className="text-muted-foreground">차트 데이터를 불러올 수 없습니다. ({analysisResult.explanation || '원인 불명'})</p>
             )}
             <div>
               <h4 className="font-semibold text-foreground/90">매매 신호:</h4>
@@ -253,7 +253,7 @@ export function StockSignalAnalyzer() {
               </div>
             )}
              <p className="mt-4 text-xs text-muted-foreground italic">
-              주의: 이 분석은 모의 데이터를 기반으로 하며, 단순 참고용입니다. 실제 투자 결정은 개인의 판단과 책임 하에 이루어져야 합니다.
+              주의: 이 분석은 투자 참고용이며, 실제 투자 결정은 개인의 판단과 책임 하에 신중하게 이루어져야 합니다.
             </p>
           </CardContent>
         </Card>
@@ -261,4 +261,3 @@ export function StockSignalAnalyzer() {
     </div>
   );
 }
-
