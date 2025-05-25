@@ -27,14 +27,15 @@ interface StockPriceChartProps {
 }
 
 const YAxisPriceTickFormatter = (value: number) => {
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`; // 백만 단위 추가
   if (value >= 1000) return `${(value / 1000).toFixed(0)}k`;
-  return value.toString();
+  return value.toLocaleString(); // 일반 숫자 포맷팅
 };
 
 const YAxisVolumeTickFormatter = (value: number) => {
   if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
   if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
-  return value.toString();
+  return value.toLocaleString();
 };
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -48,7 +49,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
             {`${pld.name}: ${
               pld.dataKey === 'volume' 
                 ? YAxisVolumeTickFormatter(pld.value) 
-                : pld.value.toFixed(2)}`}
+                : typeof pld.value === 'number' ? YAxisPriceTickFormatter(pld.value) : pld.value}`}
           </p>
         ))}
         {data.event && (
@@ -76,22 +77,51 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
     const eventOnDate = signalEvents.find(event => event.date === point.date);
     return {
       ...point,
-      event: eventOnDate // Add event to the data point if it exists
+      event: eventOnDate 
     };
   });
 
-  const yMin = Math.min(...chartData.map(d => d.close)) * 0.95;
-  const yMax = Math.max(...chartData.map(d => d.close)) * 1.05;
+  const closePrices = chartData.map(d => d.close);
+  let calculatedYMin = Math.min(...closePrices);
+  let calculatedYMax = Math.max(...closePrices);
+
+  if (calculatedYMin === calculatedYMax) {
+    // If all data points are the same, create a small spread around the value
+    const spread = Math.abs(calculatedYMin * 0.05) || 1; // 5% spread or +/- 1 if value is 0 or very small
+    calculatedYMin -= spread;
+    calculatedYMax += spread;
+  } else {
+    // Add 5% padding to top and bottom relative to the actual data range
+    const range = calculatedYMax - calculatedYMin;
+    calculatedYMin -= range * 0.05;
+    calculatedYMax += range * 0.05;
+  }
+  // Ensure calculatedYMin is never greater than calculatedYMax after adjustments
+  if (calculatedYMin > calculatedYMax) {
+      const temp = calculatedYMin;
+      calculatedYMin = calculatedYMax;
+      calculatedYMax = temp;
+      // If they became equal after swap (e.g. both were 0 and spread was 0), add a minimal range
+      if (calculatedYMin === calculatedYMax) {
+          calculatedYMin -= 0.5;
+          calculatedYMax += 0.5;
+      }
+  }
+
+
+  const yMinPriceDomain = calculatedYMin;
+  const yMaxPriceDomain = calculatedYMax;
+
 
   // For Y-axis of volume chart
   const volumeData = chartData.filter(d => d.volume !== undefined && d.volume !== null).map(d => d.volume as number);
-  const yVolumeMax = volumeData.length > 0 ? Math.max(...volumeData) * 1.2 : 0;
+  const yVolumeMax = volumeData.length > 0 ? Math.max(...volumeData) * 1.2 : 1; // Ensure yVolumeMax is at least 1 to avoid 0 domain
 
 
   return (
     <div style={{ width: '100%', height: 450 }}>
       <ResponsiveContainer width="100%" height="70%">
-        <LineChart data={dataWithSignals} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+        <LineChart data={dataWithSignals} margin={{ top: 5, right: 30, left: 5, bottom: 5 }}> {/* Increased right margin for YAxis labels */}
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
           <XAxis 
             dataKey="date" 
@@ -100,13 +130,15 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
             angle={-30}
             textAnchor="end"
             height={40}
+            interval="preserveStartEnd" // Ensure first and last ticks are shown
           />
           <YAxis 
             yAxisId="left"
-            domain={[yMin, yMax]} 
+            domain={[yMinPriceDomain, yMaxPriceDomain]} 
             tickFormatter={YAxisPriceTickFormatter}
             tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-            width={45}
+            width={55} // Adjusted width for potentially longer tick labels
+            allowDataOverflow={false}
           />
           <Tooltip content={<CustomTooltip />} />
           <Legend wrapperStyle={{ fontSize: '12px' }} />
@@ -126,13 +158,12 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
               yAxisId="left"
               x={event.date}
               y={event.price}
-              r={8} // Increased radius for better visibility
+              r={8} 
               fill={event.type === 'buy' ? 'hsl(var(--chart-2))' : event.type === 'sell' ? 'hsl(var(--destructive))' : 'hsl(var(--chart-3))'}
               stroke="hsl(var(--background))"
               strokeWidth={2}
-              isFront={true} // Ensure dot is on top
+              isFront={true} 
             >
-              {/* Custom label/icon inside ReferenceDot */}
               <foreignObject x={-7} y={-7} width={14} height={14}>
                 {event.type === 'buy' && <ArrowUpCircle size={14} className="text-white" />}
                 {event.type === 'sell' && <ArrowDownCircle size={14} className="text-white" />}
@@ -144,7 +175,7 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
       </ResponsiveContainer>
       {volumeData.length > 0 && (
         <ResponsiveContainer width="100%" height="30%">
-            <BarChart data={dataWithSignals} margin={{ top: 10, right: 20, left: -20, bottom: 5 }}>
+            <BarChart data={dataWithSignals} margin={{ top: 10, right: 30, left: 5, bottom: 5 }}> {/* Increased right margin */}
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false}/>
             <XAxis 
                 dataKey="date" 
@@ -153,14 +184,15 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
                 axisLine={false}
                 tickLine={false}
                 height={20}
+                interval="preserveStartEnd"
             />
             <YAxis 
-                yAxisId="right"
-                orientation="left"
+                yAxisId="right" // This ID is for the BarChart's YAxis
+                orientation="left" // Ticks on the left of the axis line
                 domain={[0, yVolumeMax]} 
                 tickFormatter={YAxisVolumeTickFormatter}
                 tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                width={45}
+                width={55} // Adjusted width
                 axisLine={false}
                 tickLine={false}
             />
@@ -172,16 +204,3 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
     </div>
   );
 }
-
-// Helper components for simple arrow shapes if needed (instead of lucide icons)
-// const BuyArrow = (props: any) => (
-//   <svg {...props} viewBox="0 0 10 10" width="10" height="10">
-//     <polygon points="5,0 10,10 0,10" fill="green" />
-//   </svg>
-// );
-
-// const SellArrow = (props: any) => (
-//   <svg {...props} viewBox="0 0 10 10" width="10" height="10">
-//     <polygon points="0,0 10,0 5,10" fill="red" />
-//   </svg>
-// );
