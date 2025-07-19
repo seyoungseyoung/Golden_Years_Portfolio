@@ -1,4 +1,3 @@
-
 // src/components/dashboard/StockPriceChart.tsx
 "use client";
 

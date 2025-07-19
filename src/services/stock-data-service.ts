@@ -1,4 +1,3 @@
-
 // src/services/stock-data-service.ts
 /**
  * @fileOverview 주식 데이터 조회를 위한 서비스입니다.
@@ -88,7 +87,7 @@ export async function getStockData(ticker: string): Promise<StockDataResponse> {
     let errorType = "UNKNOWN_ERROR";
     let errorMessageContent = `티커 '${ticker}'의 데이터를 가져오는 중 알 수 없는 오류가 발생했습니다.`;
 
-    if (error.name === 'Not Found' || error.message?.includes('404')) {
+    if (error.code === '404' || error.message?.includes('404 Not Found')) {
       errorType = "TICKER_NOT_FOUND";
       errorMessageContent = `티커 '${ticker}'를 찾을 수 없습니다. 올바른 티커인지 확인해주세요.`;
     } else {
