@@ -78,7 +78,7 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
   const dataWithCandle = chartData.map(d => ({
     ...d,
     candleWick: [d.low, d.high],
-    candleBody: d.open && d.close ? [d.open, d.close] : undefined,
+    candleBody: d.open && d.close ? [d.open, d.close].sort((a, b) => a - b) : undefined,
     isRising: d.close >= (d.open ?? d.close),
     event: signalEvents.find(e => e.date === d.date),
   }));

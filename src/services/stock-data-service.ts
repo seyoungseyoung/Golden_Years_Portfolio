@@ -40,12 +40,12 @@ export async function getStockData(ticker: string): Promise<StockDataResponse> {
     period2: endDate.format('YYYY-MM-DD'),
     interval: '1d' as const,
   };
-
+  
   console.log(`[getStockData] Querying Yahoo Finance with options: ${JSON.stringify(queryOptions)}`);
 
   try {
     const results = await yahooFinance.historical(ticker, queryOptions);
-
+    
     if (!results || results.length === 0) {
       const errorMsg = `TICKER_NOT_FOUND: 티커 '${ticker}'에 대한 데이터를 야후 파이낸스에서 찾을 수 없습니다. (기간: ${queryOptions.period1} ~ ${queryOptions.period2})`;
       console.warn(`[getStockData] Warning: ${errorMsg}`);
@@ -77,7 +77,7 @@ export async function getStockData(ticker: string): Promise<StockDataResponse> {
       console.warn(`[getStockData] Warning: ${errorMsg}`);
       return { prices: [], error: errorMsg };
     }
-
+    
     console.log(`[getStockData] Processed ${validPrices.length} valid data points. Period: ${validPrices[0].date} to ${validPrices[validPrices.length - 1].date}`);
     return { prices: validPrices };
 
