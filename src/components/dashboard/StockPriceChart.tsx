@@ -13,7 +13,6 @@ import {
   Tooltip,
   Legend,
   ReferenceDot,
-  Customized,
 } from 'recharts';
 import { ArrowUpCircle, ArrowDownCircle, MinusCircle } from 'lucide-react';
 import type { AnalyzeStockSignalOutput } from '@/types';
@@ -22,48 +21,39 @@ type StockDataPoint = AnalyzeStockSignalOutput['chartData'] extends (infer U)[] 
 type SignalEvent = AnalyzeStockSignalOutput['signalEvents'] extends (infer U)[] | undefined ? U : never;
 
 const Candlestick = (props: any) => {
-  const { x, y, width, height, open, close, high, low, fill, index } = props;
+  const { x, y, width, height, low, high, open, close } = props;
+  const isRising = close >= open;
+  const color = isRising ? 'hsl(var(--chart-2))' : 'hsl(var(--destructive))';
+  const wickColor = 'hsl(var(--foreground))';
 
-  if (index < 5) {
-      console.log(`Candlestick[${index}] PROPS:`, props);
-  }
-
-  if (x === undefined || y === undefined || width <= 0 || height === undefined || open === undefined || close === undefined || high === undefined || low === undefined) {
-    if (index < 5) console.warn(`Candlestick[${index}]: Invalid props for drawing.`);
+  // Ensure all values are valid numbers before drawing
+  if ([x, y, width, height, low, high, open, close].some(val => typeof val !== 'number' || !isFinite(val))) {
     return null;
   }
   
-  const isRising = close >= open;
-  const bodyFill = isRising ? 'hsl(var(--chart-2))' : 'hsl(var(--destructive))';
-  const wickStroke = 'hsl(var(--foreground))';
-
-  const bodyY = Math.min(y, y + height);
-  const bodyHeight = Math.max(1, Math.abs(height));
-  const wickCenterX = x + width / 2;
-
-  // recharts' Bar y prop is the top of the bar, and height can be negative for rising bars.
-  // high/low are absolute values, we need to scale them
-  // This approach is complex within a shape. Let's simplify.
-  // The provided props `x, y, width, height` already define the candle body.
+  const ratio = Math.abs(height / (open - close));
 
   return (
-    <g key={`candlestick-${props.payload.date || index}`}>
+    <g stroke={wickColor} strokeWidth="1" fill={color}>
       {/* Wick */}
-      <line
-        x1={wickCenterX}
-        y1={props.yAxis.scale(high)}
-        x2={wickCenterX}
-        y2={props.yAxis.scale(low)}
-        stroke={wickStroke}
-        strokeWidth={1}
+      <path
+        d={`
+          M ${x + width / 2},${y + height}
+          L ${x + width / 2},${y + ratio * (high - close)}
+          M ${x + width / 2},${y}
+          L ${x + width / 2},${y + ratio * (low - open)}
+        `}
       />
       {/* Body */}
-      <rect
-        x={x}
-        y={bodyY}
-        width={width}
-        height={bodyHeight}
-        fill={bodyFill}
+      <path
+        d={`
+          M ${x},${y}
+          L ${x + width},${y}
+          L ${x + width},${y + height}
+          L ${x},${y + height}
+          L ${x},${y}
+        `}
+        fill={color}
       />
     </g>
   );
@@ -84,7 +74,6 @@ const YAxisVolumeTickFormatter = (value: number) => {
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
-    // The payload for ComposedChart can be tricky. We need to find the one with our main data.
     const dataPoint = payload[0].payload as StockDataPoint & { event?: SignalEvent };
     
     return (
@@ -122,47 +111,36 @@ interface StockPriceChartProps {
 
 export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProps) {
   if (!chartData || !Array.isArray(chartData) || chartData.length < 2) {
-    console.warn("[StockPriceChart] 차트 데이터가 유효하지 않거나 부족합니다.", chartData);
+    console.warn("[StockPriceChart] Not enough valid data to render chart.", chartData);
     return <p className="text-muted-foreground p-4 text-center">차트 데이터를 표시하기에 정보가 부족합니다.</p>;
   }
 
-  console.log(`[StockPriceChart] 렌더링: chartData ${chartData.length}개, signalEvents ${signalEvents.length}개`);
-
-  const dataWithSignals = chartData.map(point => ({
-    ...point,
-    event: signalEvents.find(event => event.date === point.date),
-    candle: [point.open, point.close] // for the candlestick bar
+  const dataWithCandle = chartData.map(d => ({
+    ...d,
+    candle: [d.open, d.close]
   }));
 
   const pricesForDomain = chartData.flatMap(d => [d.high, d.low]).filter(p => typeof p === 'number' && isFinite(p)) as number[];
   if (pricesForDomain.length === 0) {
-    console.error("[StockPriceChart] Y축 도메인을 계산할 유효한 가격 데이터가 없습니다.");
     return <p className="text-destructive p-4 text-center">차트 데이터에 유효한 가격 정보가 없습니다.</p>;
   }
 
   let yMin = Math.min(...pricesForDomain);
   let yMax = Math.max(...pricesForDomain);
   const padding = (yMax - yMin) * 0.1;
-  yMin -= padding;
+  yMin = Math.max(0, yMin - padding);
   yMax += padding;
-
-  if (yMin < 0 && pricesForDomain.every(p => p >= 0)) {
-    yMin = 0;
-  }
-  if (yMin >= yMax) {
-    yMin = yMax - 1; // Prevent domain error if all values are the same
-  }
 
   const volumeData = chartData.map(d => d.volume).filter(v => typeof v === 'number' && isFinite(v)) as number[];
   const yVolumeMax = volumeData.length > 0 ? Math.max(...volumeData) * 1.5 : 1;
 
-  const xAxisTickInterval = Math.max(1, Math.floor(chartData.length / 10)); // Show about 10 ticks
+  const xAxisTickInterval = Math.max(1, Math.floor(chartData.length / 10));
 
   return (
     <div style={{ width: '100%', height: 450 }}>
       {/* Price Chart */}
       <ResponsiveContainer width="100%" height="70%">
-        <ComposedChart data={dataWithSignals} margin={{ top: 5, right: 30, left: 5, bottom: 5 }}>
+        <ComposedChart data={dataWithCandle} margin={{ top: 5, right: 30, left: 5, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
           <XAxis 
             dataKey="date" 
@@ -180,52 +158,7 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
           <Tooltip content={<CustomTooltip />} />
           <Legend wrapperStyle={{ fontSize: '12px' }} />
           
-          {/* Candlestick Wicks (as a Bar with custom shape) */}
-          <Bar yAxisId="left" dataKey="high" fill="none" isAnimationActive={false}>
-            {dataWithSignals.map((entry, index) => (
-              <Customized
-                key={`wick-${index}`}
-                component={(props: any) => {
-                  const { x, width, yAxis } = props;
-                  if (x === undefined || width === undefined || !yAxis) return null;
-                  const wickCenterX = x + width / 2;
-                  return (
-                    <line
-                      x1={wickCenterX} y1={yAxis.scale(entry.high)}
-                      x2={wickCenterX} y2={yAxis.scale(entry.low)}
-                      stroke={'hsl(var(--foreground))'} strokeWidth={1}
-                    />
-                  );
-                }}
-              />
-            ))}
-          </Bar>
-
-          {/* Candlestick Body (as a Bar) */}
-          <Bar yAxisId="left" dataKey="candle" isAnimationActive={false}>
-            {dataWithSignals.map((entry, index) => (
-                <Customized
-                    key={`body-${index}`}
-                    component={(props: any) => {
-                        const {x, width, yAxis} = props;
-                        if (x === undefined || width === undefined || !yAxis || entry.open === undefined || entry.close === undefined) return null;
-                        
-                        const yOpen = yAxis.scale(entry.open);
-                        const yClose = yAxis.scale(entry.close);
-                        const isRising = entry.close >= entry.open;
-                        
-                        return (
-                            <rect
-                                x={x}
-                                y={Math.min(yOpen, yClose)}
-                                width={width}
-                                height={Math.max(1, Math.abs(yOpen - yClose))}
-                                fill={isRising ? 'hsl(var(--chart-2))' : 'hsl(var(--destructive))'}
-                            />
-                        );
-                    }}
-                />
-            ))}
+          <Bar name="가격" yAxisId="left" dataKey="candle" shape={<Candlestick />} isAnimationActive={false}>
           </Bar>
 
           {signalEvents.map((event, index) => (
@@ -247,7 +180,7 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
       {/* Volume Chart */}
       {volumeData.length > 0 && (
         <ResponsiveContainer width="100%" height="30%">
-          <ComposedChart data={dataWithSignals} margin={{ top: 10, right: 30, left: 5, bottom: 20 }}>
+          <ComposedChart data={dataWithCandle} margin={{ top: 10, right: 30, left: 5, bottom: 20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false}/>
             <XAxis dataKey="date" tickFormatter={(tick) => tick?.substring(5) ?? ''}
               tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
@@ -267,4 +200,3 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
     </div>
   );
 }
-

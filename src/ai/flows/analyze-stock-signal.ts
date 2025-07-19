@@ -8,115 +8,33 @@
  * - AnalyzeStockSignalOutput - analyzeStockSignal 함수의 반환 유형입니다.
  */
 
-import dayjs from 'dayjs';
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import yahooFinance from 'yahoo-finance2';
+import { getStockData, type StockData, type StockDataResponse } from '@/services/stock-data-service';
 
 const getStockDataTool = ai.defineTool(
   {
     name: 'getStockData',
-    description: '지정된 티커에 대한 과거 주가 데이터를 야후 파이낸스에서 가져옵니다. 날짜, 시가(open), 고가(high), 저가(low), 종가(close), 거래량(volume) 데이터를 포함해야 합니다. 항상 오늘 날짜로부터 과거 1년치 일봉 데이터를 가져옵니다.',
+    description: '지정된 티커에 대한 과거 1년치 주가 데이터를 가져옵니다.',
     inputSchema: z.object({
-      ticker: z.string().describe('주식 티커 심볼 (예: AAPL, MSFT, GOOG, 005930.KS). 야후 파이낸스 형식 사용 권장.'),
+      ticker: z.string().describe('주식 티커 심볼 (예: AAPL, MSFT, GOOG, 005930.KS).'),
     }),
     outputSchema: z.object({
       prices: z.array(
         z.object({
-          date: z.string().describe('날짜 (YYYY-MM-DD)'),
-          open: z.number().optional().describe('시가'),
-          high: z.number().optional().describe('고가'),
-          low: z.number().optional().describe('저가'),
-          close: z.number().describe('종가'),
-          adjClose: z.number().optional().describe('수정 종가'),
-          volume: z.number().optional().describe('거래량'),
+          date: z.string(),
+          open: z.number().optional(),
+          high: z.number().optional(),
+          low: z.number().optional(),
+          close: z.number(),
+          volume: z.number().optional(),
         })
-      ).describe('과거 가격 및 거래량 데이터 배열. 각 항목은 날짜, 시가, 고가, 저가, 종가, 거래량, 수정종가를 포함해야 합니다.'),
-      error: z.string().optional().describe('데이터 조회 중 오류 발생 시 메시지. 오류 유형(예: "TICKER_NOT_FOUND", "API_ERROR", "DATA_INCOMPLETE", "UNKNOWN_ERROR")과 상세 메시지를 포함할 수 있음.'),
+      ),
+      error: z.string().optional(),
     }),
   },
-  async ({ticker}) => {
-    console.log(`[getStockDataTool] 호출됨: ticker='${ticker}'`);
-    
-    // 항상 오늘 날짜로부터 정확히 1년치 데이터를 가져오도록 날짜 설정
-    const endDate = dayjs().format('YYYY-MM-DD');
-    const startDate = dayjs().subtract(1, 'year').format('YYYY-MM-DD');
-    const queryInterval = '1d';
-
-    const queryOptions = {
-      period1: startDate,
-      period2: endDate, // 종료일을 명시적으로 오늘 날짜로 설정
-      interval: queryInterval, 
-    };
-
-    console.log(`[getStockDataTool] 야후 파이낸스 API 요청 옵션: ${ticker}, ${JSON.stringify(queryOptions)}`);
-
-    try {
-      const results = await yahooFinance.historical(ticker, queryOptions);
-      
-      if (!results || results.length === 0) {
-        const errorMsg = `TICKER_NOT_FOUND: 티커 '${ticker}'에 대한 데이터를 야후 파이낸스에서 찾을 수 없습니다. (기간: ${startDate} ~ ${endDate})`;
-        console.warn(`[getStockDataTool] 경고: ${errorMsg}`);
-        return { prices: [], error: errorMsg };
-      }
-      console.log(`[getStockDataTool] 야후 파이낸스에서 ${results.length}개의 결과를 받았습니다.`);
-
-      const mappedPrices = results.map(data => {
-        if (!data || !data.date) return null;
-        return {
-          date: dayjs(data.date).format('YYYY-MM-DD'),
-          open: data.open,
-          high: data.high,
-          low: data.low,
-          close: data.close,
-          adjClose: data.adjClose,
-          volume: data.volume,
-        };
-      }).filter(price => price !== null) as any[];
-
-      const validPrices = mappedPrices.filter(price => 
-          price &&
-          typeof price.date === 'string' &&
-          typeof price.close === 'number' && isFinite(price.close) &&
-          typeof price.high === 'number' && isFinite(price.high) &&
-          typeof price.low === 'number' && isFinite(price.low) &&
-          typeof price.open === 'number' && isFinite(price.open) &&
-          (price.volume === undefined || (typeof price.volume === 'number' && isFinite(price.volume)))
-      );
-      
-      if (validPrices.length < 2) { // 차트를 그리려면 최소 2개의 데이터 포인트가 필요
-          const errorMsg = `DATA_INCOMPLETE: 티커 '${ticker}'에 대한 유효한 OHLCV 데이터가 부족합니다 (${validPrices.length}개). 차트를 표시할 수 없습니다.`;
-          console.warn(`[getStockDataTool] 경고: ${errorMsg}`);
-          return { prices: [], error: errorMsg };
-      }
-      
-      validPrices.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-      console.log(`[getStockDataTool] 유효한 데이터 ${validPrices.length}개를 처리했습니다. 기간: ${validPrices[0].date} ~ ${validPrices[validPrices.length - 1].date}`);
-      
-      return { prices: validPrices };
-
-    } catch (error: any) {
-      console.error(`[getStockDataTool] 야후 파이낸스 API 오류 (${ticker}):`, error);
-      
-      let errorType = "UNKNOWN_ERROR";
-      let errorMessageContent = `티커 '${ticker}'의 데이터를 가져오는 중 알 수 없는 오류가 발생했습니다.`;
-
-      if (error && (error.message || error.code)) {
-        const lowerCaseMessage = (error.message || '').toLowerCase();
-        if (lowerCaseMessage.includes('not found') || error.code === '404' || (error.response && error.response.status === 404)) { 
-          errorType = "TICKER_NOT_FOUND";
-          errorMessageContent = `티커 '${ticker}'를 찾을 수 없습니다. 올바른 티커인지 확인해주세요.`;
-        } else {
-           errorType = "API_ERROR";
-           errorMessageContent = `야후 파이낸스 데이터 조회 중 오류가 발생했습니다: ${error.message}`;
-        }
-      }
-      
-      const finalErrorMsg = `${errorType}: ${errorMessageContent}`;
-      console.error(`[getStockDataTool] 최종 오류 반환: ${finalErrorMsg}`);
-      return { prices: [], error: finalErrorMsg };
-    }
+  async ({ticker}): Promise<StockDataResponse> => {
+    return getStockData(ticker);
   }
 );
 
@@ -143,7 +61,7 @@ const AnalyzeStockSignalOutputSchema = z.object({
       close: z.number().describe("종가"),
       volume: z.number().optional().describe("거래량"),
     })
-  ).optional().describe("차트 표시에 사용될 과거 주가 데이터 (날짜, 시가, 고가, 저가, 종가 및 거래량). getStockDataTool에서 받은 데이터를 기반으로 제공."),
+  ).optional().describe("차트 표시에 사용될 과거 주가 데이터. getStockDataTool에서 받은 데이터를 기반으로 제공."),
   signalEvents: z.array(
     z.object({
       date: z.string().describe("신호 발생 날짜 (YYYY-MM-DD). chartData에 포함된 날짜여야 함."),
@@ -151,7 +69,7 @@ const AnalyzeStockSignalOutputSchema = z.object({
       price: z.number().describe("신호 발생 시점의 가격 (해당 날짜의 종가)"),
       indicator: z.string().optional().describe("이 신호를 트리거한 주요 지표 또는 근거. 예: 'RSI 과매도', '볼린저밴드 하단 터치', 'MACD 골든크로스 및 거래량 증가'"),
     })
-  ).optional().describe("차트에 화살표 등으로 표시할 주요 매매 신호 이벤트 (최대 3-5개). 각 이벤트는 어떤 지표(들)에 의해 트리거되었는지 명시하는 것이 좋습니다.")
+  ).optional().describe("차트에 화살표 등으로 표시할 주요 매매 신호 이벤트 (최대 3-5개).")
 });
 export type AnalyzeStockSignalOutput = z.infer<typeof AnalyzeStockSignalOutputSchema>;
 
@@ -165,7 +83,7 @@ const prompt = ai.definePrompt({
   output: {schema: AnalyzeStockSignalOutputSchema},
   tools: [getStockDataTool],
   system: `당신은 사용자의 투자 성향, 선호하는 매매 전략, 그리고 선택된 기술 지표를 바탕으로 주식 매매 신호를 분석하는 AI 금융 분석가입니다. 
-  제공되는 주가 데이터(날짜, 시가, 고가, 저가, 종가, 거래량 포함)는 실제 금융 데이터로 가정하고 답변해야 합니다.
+  제공되는 주가 데이터는 실제 금융 데이터로 가정하고 답변해야 합니다.
   분석 결과는 투자 조언이 아닌 참고용 정보임을 강조해주세요.`,
   prompt: `다음 정보를 바탕으로 주식 매매 신호를 분석해주세요:
   - 주식 티커: {{{ticker}}}
@@ -187,18 +105,18 @@ const prompt = ai.definePrompt({
   explanation 필드에 "데이터 조회 중 다음 오류가 발생했습니다: [받은 오류 메시지 전체]" 와 같이 명확히 명시해주세요.
   signal 필드는 "분석 불가"로 설정하고, confidence는 "낮음", chartData와 signalEvents는 빈 배열로 설정합니다.
 
-  데이터를 성공적으로 가져왔다면 (즉, getStockData 도구 응답에 'error' 필드가 없거나 비어 있다면), 해당 데이터와 선택된 기술 지표 ({{#each indicators}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}})를 종합적으로 고려하여, 다음 사항을 포함한 분석 결과를 제공해주세요:
+  데이터를 성공적으로 가져왔다면 (즉, getStockData 도구 응답에 'error' 필드가 없거나 비어 있다면), 해당 데이터와 선택된 기술 지표를 종합적으로 고려하여, 다음 사항을 포함한 분석 결과를 제공해주세요:
 
   1.  **매매 신호 (signal)**: (예: "강력 매수", "매수 고려", "관망", "매도 고려", "분석 불가")
   2.  **설명 (explanation)**:
-      *   왜 그렇게 판단했는지, 각 선택된 기술 지표가 현재 상황에서 어떤 의미를 가지는지 설명해주세요. (예: "최근 주가 흐름과 RSI 지표가 30 이하 과매도 구간에 진입한 점을 고려할 때 단기적 반등 가능성이 있습니다.", "볼린저 밴드 하단을 터치 후 반등하는 모습을 보여 매수 고려 시점으로 볼 수 있습니다. 거래량도 평균 이상으로 증가하고 있어 신뢰도를 높입니다.")
-      *   사용자의 위험 감수 수준 ({{{riskTolerance}}})을 고려하여 신호를 어떻게 해석해야 할지 조언해주세요. (예: "보수적인 투자자라면 추가적인 확인이 필요할 수 있지만, 공격적인 투자자라면 분할 매수를 고려해볼 수 있습니다.")
-      *   {{#if customTimingPrompt}}사용자가 입력한 선호 매매 전략/타이밍 ("{{{customTimingPrompt}}}")을 분석에 어떻게 반영했는지 간략히 언급해주세요. (예: "사용자께서 언급하신 단기 변동성 활용 전략에 따라, RSI와 볼린저 밴드의 단기 신호에 더 주목했습니다."){{/if}}
+      *   왜 그렇게 판단했는지, 각 선택된 기술 지표가 현재 상황에서 어떤 의미를 가지는지 설명해주세요.
+      *   사용자의 위험 감수 수준 ({{{riskTolerance}}})을 고려하여 신호를 어떻게 해석해야 할지 조언해주세요.
+      *   {{#if customTimingPrompt}}사용자가 입력한 선호 매매 전략/타이밍 ("{{{customTimingPrompt}}}")을 분석에 어떻게 반영했는지 간략히 언급해주세요.{{/if}}
       *   이 분석은 투자 참고용 정보이며, 실제 투자 결정은 신중해야 함을 다시 한번 강조해주세요.
   3.  **확신 수준 (confidence, 선택 사항)**: 신호에 대한 당신의 확신 수준 (높음, 중간, 낮음)
-  4.  **지표별 요약 (indicatorSummary, 선택 사항)**: 각 선택된 지표가 나타내는 간략한 신호 또는 상태를 객체 형태로 제공해주세요. (예: {"RSI": "과매도 (28.5)", "BollingerBands": "하단 근접", "MACD": "데드 크로스 발생"})
-  5.  **차트 데이터 (chartData)**: getStockData 도구에서 반환된 과거 주가 데이터 전체(날짜, 시가, 고가, 저가, 종가, 거래량 포함)를 그대로 제공해주세요. 이 데이터는 차트 표시에 사용됩니다. 데이터가 없다면 빈 배열로 제공해주세요.
-  6.  **신호 이벤트 (signalEvents)**: 분석 결과, 차트 상에 화살표로 표시할 만한 주요 매수(buy), 매도(sell) 또는 관망(hold) 신호가 발생했다고 판단되는 지점을 날짜(date), 신호 유형(type: 'buy'|'sell'|'hold'), 당시 종가(price), 그리고 **해당 신호를 판단하게 된 주요 지표 또는 근거(indicator, 예: 'RSI 과매도 및 볼린저밴드 하단 터치', 'MACD 골든크로스 및 거래량 증가')**와 함께 배열로 제공해주세요. 최대 3-5개의 주요 이벤트를 선정하고, 날짜는 제공된 chartData 내의 실제 날짜여야 하며, 가격은 해당 날짜의 종가여야 합니다. {{#if customTimingPrompt}}사용자 선호 전략/타이밍("{{{customTimingPrompt}}}")을 고려하여 신호 이벤트를 선정해주세요.{{/if}} 데이터가 없다면 빈 배열로 제공해주세요.
+  4.  **지표별 요약 (indicatorSummary, 선택 사항)**: 각 선택된 지표가 나타내는 간략한 신호 또는 상태를 객체 형태로 제공해주세요.
+  5.  **차트 데이터 (chartData)**: getStockData 도구에서 반환된 과거 주가 데이터 전체를 그대로 제공해주세요. 이 데이터는 차트 표시에 사용됩니다. 데이터가 없다면 빈 배열로 제공해주세요.
+  6.  **신호 이벤트 (signalEvents)**: 분석 결과, 차트 상에 화살표로 표시할 만한 주요 매수(buy), 매도(sell) 또는 관망(hold) 신호가 발생했다고 판단되는 지점을 날짜(date), 신호 유형(type: 'buy'|'sell'|'hold'), 당시 종가(price), 그리고 **해당 신호를 판단하게 된 주요 지표 또는 근거(indicator)**와 함께 배열로 제공해주세요. 최대 3-5개의 주요 이벤트를 선정해주세요. 데이터가 없다면 빈 배열로 제공해주세요.
 
   결과는 반드시 AnalyzeStockSignalOutputSchema 형식에 맞춰주세요.
   `,
@@ -211,11 +129,11 @@ const analyzeStockSignalFlow = ai.defineFlow(
     outputSchema: AnalyzeStockSignalOutputSchema,
   },
   async (input) => {
-    console.log("[analyzeStockSignalFlow] 입력값 수신:", input);
+    console.log("[analyzeStockSignalFlow] Input received:", input);
     const {output} = await prompt(input); 
     
     if (!output) {
-        console.error("[analyzeStockSignalFlow] AI 모델로부터 유효한 응답을 받지 못했습니다. Input:", input);
+        console.error("[analyzeStockSignalFlow] Did not receive a valid response from the AI model. Input:", input);
         return {
             signal: "분석 오류",
             explanation: "AI 모델로부터 유효한 응답을 받지 못했습니다. 입력값을 확인하거나 잠시 후 다시 시도해주세요.",
@@ -226,21 +144,13 @@ const analyzeStockSignalFlow = ai.defineFlow(
         };
     }
 
-    // AI 응답의 안정성을 위해 optional 필드에 기본값 할당
-    if (!output.chartData || !Array.isArray(output.chartData)) {
-        output.chartData = [];
-    }
-    if (!output.signalEvents || !Array.isArray(output.signalEvents)) {
-        output.signalEvents = [];
-    }
-    if (!output.indicatorSummary) {
-        output.indicatorSummary = {};
-    }
-    if (!output.confidence) {
-        output.confidence = "정보 없음";
-    }
+    // Ensure optional fields have default values for stability
+    output.chartData ??= [];
+    output.signalEvents ??= [];
+    output.indicatorSummary ??= {};
+    output.confidence ??= "정보 없음";
     
-    console.log("[analyzeStockSignalFlow] AI 최종 반환 결과 (일부):", { 
+    console.log("[analyzeStockSignalFlow] Final AI return result (summary):", { 
         signal: output.signal, 
         explanationLength: output.explanation?.length || 0, 
         chartDataLength: output.chartData?.length || 0, 
