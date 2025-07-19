@@ -36,41 +36,34 @@ const getStockDataTool = ai.defineTool(
     }),
   },
   async ({ticker}) => {
-    console.log(`getStockDataTool 호출됨 (입력): ticker=${ticker}`);
+    console.log(`[getStockDataTool] 호출됨: ticker='${ticker}'`);
     
-    const today = dayjs();
-    const oneYearAgo = today.subtract(1, 'year');
-    const startDate = oneYearAgo.format('YYYY-MM-DD');
-    const endDate = today.format('YYYY-MM-DD');
+    const endDate = dayjs().format('YYYY-MM-DD');
+    const startDate = dayjs().subtract(1, 'year').format('YYYY-MM-DD');
     const queryInterval = '1d';
 
     const queryOptions = {
       period1: startDate,
-      period2: endDate,
+      // period2: endDate, // period2를 생략하면 가장 최근 데이터까지 가져옴
       interval: queryInterval, 
     };
 
-    console.log(`getStockDataTool: 야후 파이낸스 API 요청 옵션: ${ticker}, ${JSON.stringify(queryOptions)}`);
-    console.log(`getStockDataTool: Requesting data for ${ticker} from ${startDate} to ${endDate} with interval ${queryInterval}`);
+    console.log(`[getStockDataTool] 야후 파이낸스 API 요청 옵션: ${ticker}, ${JSON.stringify(queryOptions)}`);
 
     try {
       const results = await yahooFinance.historical(ticker, queryOptions);
       
       if (!results || results.length === 0) {
-        console.warn(`getStockDataTool: 야후 파이낸스에서 티커 \'${ticker}\'에 대한 응답이 null이거나 비어있습니다.`);
-        return { prices: [], error: `TICKER_NOT_FOUND: 티커 '${ticker}'에 대한 데이터를 야후 파이낸스에서 찾을 수 없습니다 (응답 없음). (기간: ${queryOptions.period1} ~ ${queryOptions.period2})` };
+        const errorMsg = `TICKER_NOT_FOUND: 티커 '${ticker}'에 대한 데이터를 야후 파이낸스에서 찾을 수 없습니다. (기간: ${startDate} ~ ${endDate})`;
+        console.warn(`[getStockDataTool] 경고: ${errorMsg}`);
+        return { prices: [], error: errorMsg };
       }
-      console.log(`getStockDataTool: Received ${results.length} results from Yahoo Finance. First item:`, results.length > 0 ? results[0] : "No data received");
+      console.log(`[getStockDataTool] 야후 파이낸스에서 ${results.length}개의 결과를 받았습니다.`);
 
       const mappedPrices = results.map(data => {
-        let dateStr = '';
-        if (data.date && typeof data.date.toISOString === 'function') {
-            dateStr = data.date.toISOString().split('T')[0];
-        } else {
-            return null; 
-        }
+        if (!data || !data.date) return null;
         return {
-          date: dateStr,
+          date: dayjs(data.date).format('YYYY-MM-DD'),
           open: data.open,
           high: data.high,
           low: data.low,
@@ -78,70 +71,55 @@ const getStockDataTool = ai.defineTool(
           adjClose: data.adjClose,
           volume: data.volume,
         };
-      }).filter(price => price !== null);
+      }).filter(price => price !== null) as any[];
 
-      let formattedPrices = mappedPrices.filter(price => 
-          typeof price.open === 'number' && isFinite(price.open) &&
+      const validPrices = mappedPrices.filter(price => 
+          price &&
+          typeof price.date === 'string' &&
+          typeof price.close === 'number' && isFinite(price.close) &&
           typeof price.high === 'number' && isFinite(price.high) &&
           typeof price.low === 'number' && isFinite(price.low) &&
-          typeof price.close === 'number' && isFinite(price.close) &&
-          (price.volume === undefined || (typeof price.volume === 'number' && isFinite(price.volume))) &&
-          price.date !== ''
+          typeof price.open === 'number' && isFinite(price.open) &&
+          (price.volume === undefined || (typeof price.volume === 'number' && isFinite(price.volume)))
       );
       
-      formattedPrices = formattedPrices.map(price => ({
-        date: price.date,
-        open: Number(price.open),
-        high: Number(price.high),
-        low: Number(price.low),
-        close: Number(price.close),
-        volume: (typeof price.volume === 'number' && isFinite(price.volume)) ? Number(price.volume) : undefined,
-      }));
-
-      formattedPrices.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-      console.log(`getStockDataTool: 유효한 OHLCV 데이터 개수 (정렬 후): ${formattedPrices.length}`);
-      if (formattedPrices.length > 0) {
-        console.log(`getStockDataTool: 정렬 후 첫 5개:`, formattedPrices.slice(0,5));
-        console.log(`getStockDataTool: 정렬 후 마지막 5개:`, formattedPrices.slice(-5));
-        console.log(`getStockDataTool: 가져온 데이터 기간 범위: ${formattedPrices[0].date} ~ ${formattedPrices[formattedPrices.length - 1].date}`);
-      } else {
-         console.warn(`getStockDataTool: 유효한 OHLCV 데이터가 없습니다.`);
-      }
-
-      if (formattedPrices.length < 100) { // 약 1년치 데이터에 비해 너무 적으면 문제로 간주 (예: 250 거래일 중 100일 미만)
-        console.warn(`getStockDataTool: 티커 \'${ticker}\'에 대한 유효 데이터가 부족합니다 (${formattedPrices.length}개). 차트 표시에 부적합할 수 있습니다.`);
-        return { prices: formattedPrices, error: `DATA_INCOMPLETE: 티커 '${ticker}'에 대한 데이터는 찾았으나, 1년치 차트를 그리기에 충분한 연속된 가격 정보(시가, 고가, 저가, 종가)가 부족합니다 (데이터 ${formattedPrices.length}개). 티커를 확인하거나 다른 티커를 시도해보세요.` };
+      if (validPrices.length === 0) {
+          const errorMsg = `DATA_INCOMPLETE: 티커 '${ticker}'에 대한 유효한 OHLCV 데이터를 찾을 수 없습니다. 티커를 확인하거나 다른 티커를 시도해보세요.`;
+          console.warn(`[getStockDataTool] 경고: ${errorMsg}`);
+          return { prices: [], error: errorMsg };
       }
       
-      return { prices: formattedPrices };
+      validPrices.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      console.log(`[getStockDataTool] 유효한 데이터 ${validPrices.length}개를 처리했습니다. 기간: ${validPrices[0].date} ~ ${validPrices[validPrices.length - 1].date}`);
+      
+      // 데이터가 1년치에 비해 너무 적으면 경고
+      if (validPrices.length < 100) {
+        console.warn(`[getStockDataTool] 경고: 티커 '${ticker}'에 대한 유효 데이터가 부족합니다 (${validPrices.length}개).`);
+      }
+      
+      return { prices: validPrices };
 
     } catch (error: any) {
-      console.error(`getStockDataTool: 야후 파이낸스 API 오류 (${ticker}):`, error);
-      if (error && typeof error === 'object') {
-        console.error("Detailed error object:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
-      }
-
-      let errorType: string = "UNKNOWN_ERROR";
-      let errorMessageContent: string = `티커 '${ticker}'의 데이터를 가져오는 중 알 수 없는 오류가 발생했습니다.`;
+      console.error(`[getStockDataTool] 야후 파이낸스 API 오류 (${ticker}):`, error);
       
-      if (error.message) {
+      let errorType = "UNKNOWN_ERROR";
+      let errorMessageContent = `티커 '${ticker}'의 데이터를 가져오는 중 알 수 없는 오류가 발생했습니다.`;
+
+      if (error && error.message) {
         const lowerCaseMessage = error.message.toLowerCase();
-        if (lowerCaseMessage.includes('not found') || (error.result && typeof error.result === 'string' && error.result.includes('No data found')) || error.code === 404 || (error.response && error.response.status === 404) ) { 
+        if (lowerCaseMessage.includes('not found') || error.code === '404' || (error.response && error.response.status === 404)) { 
           errorType = "TICKER_NOT_FOUND";
-          errorMessageContent = `티커 '${ticker}'를 찾을 수 없습니다. 올바른 티커인지 확인해주세요. (요청 기간: ${startDate} ~ ${endDate})`;
-        } else if (error.result && error.result.message) { 
-           errorType = "API_ERROR";
-           errorMessageContent = `야후 파이낸스 데이터 조회 오류 (${ticker}): ${error.result.message}`;
+          errorMessageContent = `티커 '${ticker}'를 찾을 수 없습니다. 올바른 티커인지 확인해주세요.`;
         } else {
            errorType = "API_ERROR";
-           errorMessageContent = `야후 파이낸스 데이터 조회 중 오류 (${ticker}): ${error.message}`;
-         }
-      } else if (error.name === 'FailedYahooValidationError') {
-        errorType = "VALIDATION_ERROR";
-        errorMessageContent = `잘못된 요청입니다. 입력값을 확인해주세요. (${error.message})`;
+           errorMessageContent = `야후 파이낸스 데이터 조회 중 오류가 발생했습니다: ${error.message}`;
+        }
       }
-      return { prices: [], error: `${errorType}: ${errorMessageContent}` };
+      
+      const finalErrorMsg = `${errorType}: ${errorMessageContent}`;
+      console.error(`[getStockDataTool] 최종 오류 반환: ${finalErrorMsg}`);
+      return { prices: [], error: finalErrorMsg };
     }
   }
 );
@@ -210,7 +188,7 @@ const prompt = ai.definePrompt({
   signal 필드는 "분석 불가"로 설정하고, confidence는 "낮음", chartData와 signalEvents는 빈 배열로 설정합니다.
 
   만약 getStockData 도구의 응답에 'error' 필드가 있고, 오류 메시지가 "TICKER_NOT_FOUND"나 "DATA_INCOMPLETE"가 아닌 다른 내용(예: "API_ERROR", "UNKNOWN_ERROR" 등)으로 시작하면, 
-  해당 오류 내용 전체를 사용자에게 전달하기 위해 explanation 필드에 "데이터 조회 중 다음 오류가 발생했습니다: [받은 오류 메시지 전체]" 와 같이 명확히 명시해주세요.
+  explanation 필드에 "데이터 조회 중 다음 오류가 발생했습니다: [받은 오류 메시지 전체]" 와 같이 명확히 명시해주세요.
   signal 필드는 "분석 불가"로 설정하고, confidence는 "낮음", chartData와 signalEvents는 빈 배열로 설정합니다.
 
   데이터를 성공적으로 가져왔다면 (즉, getStockData 도구 응답에 'error' 필드가 없거나 비어 있다면), 해당 데이터와 선택된 기술 지표 ({{#each indicators}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}})를 종합적으로 고려하여, 다음 사항을 포함한 분석 결과를 제공해주세요:
@@ -237,11 +215,11 @@ const analyzeStockSignalFlow = ai.defineFlow(
     outputSchema: AnalyzeStockSignalOutputSchema,
   },
   async (input) => {
-    console.log("analyzeStockSignalFlow: 입력값 수신:", input);
+    console.log("[analyzeStockSignalFlow] 입력값 수신:", input);
     const {output} = await prompt(input); 
     
     if (!output) {
-        console.error("analyzeStockSignalFlow: AI 모델로부터 유효한 응답을 받지 못했습니다. Input:", input);
+        console.error("[analyzeStockSignalFlow] AI 모델로부터 유효한 응답을 받지 못했습니다. Input:", input);
         return {
             signal: "분석 오류",
             explanation: "AI 모델로부터 유효한 응답을 받지 못했습니다. 입력값을 확인하거나 잠시 후 다시 시도해주세요.",
@@ -252,29 +230,28 @@ const analyzeStockSignalFlow = ai.defineFlow(
         };
     }
 
+    // AI 응답의 안정성을 위해 optional 필드에 기본값 할당
     if (!output.chartData || !Array.isArray(output.chartData)) {
-        console.warn("analyzeStockSignalFlow: AI 응답에 chartData가 없거나 배열이 아닙니다. 빈 배열로 설정합니다. output.chartData:", output.chartData);
         output.chartData = [];
     }
     if (!output.signalEvents || !Array.isArray(output.signalEvents)) {
         output.signalEvents = [];
     }
-
-    const result = { ...output };
-    if (!result.indicatorSummary) result.indicatorSummary = {};
-    if (!result.confidence) result.confidence = "정보 없음";
-    
-    console.log("analyzeStockSignalFlow: AI 최종 반환 결과 (일부):", { 
-        signal: result.signal, 
-        explanationLength: result.explanation?.length || 0, 
-        chartDataLength: result.chartData?.length || 0, 
-        signalEventsLength: result.signalEvents?.length || 0 
-    });
-    if (result.chartData && result.chartData.length > 0) {
-        console.log("analyzeStockSignalFlow: 반환될 chartData의 첫번째/마지막 항목:", result.chartData[0], result.chartData[result.chartData.length - 1]);
+    if (!output.indicatorSummary) {
+        output.indicatorSummary = {};
     }
-    return result;
+    if (!output.confidence) {
+        output.confidence = "정보 없음";
+    }
+    
+    console.log("[analyzeStockSignalFlow] AI 최종 반환 결과 (일부):", { 
+        signal: output.signal, 
+        explanationLength: output.explanation?.length || 0, 
+        chartDataLength: output.chartData?.length || 0, 
+        signalEventsLength: output.signalEvents?.length || 0 
+    });
+    
+    return output;
   }
 );
 
-    
