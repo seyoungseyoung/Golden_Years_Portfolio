@@ -3,7 +3,7 @@
 /**
  * @fileOverview 주식 데이터 및 기술 지표를 기반으로 매수/매도 신호를 분석하는 AI 플로우입니다.
  *
- * - analyzeStockSignal - 주식 매수/매도 신호 분석을 처리하는 함수입니다.
+ * - analyzeStockSignal - 주식 매수/매도 신호를 분석하는 함수입니다.
  * - AnalyzeStockSignalInput - analyzeStockSignal 함수의 입력 유형입니다.
  * - AnalyzeStockSignalOutput - analyzeStockSignal 함수의 반환 유형입니다.
  */
@@ -16,7 +16,7 @@ import yahooFinance from 'yahoo-finance2';
 const getStockDataTool = ai.defineTool(
   {
     name: 'getStockData',
-    description: '지정된 티커에 대한 과거 주가 데이터를 야후 파이낸스에서 가져옵니다. 날짜, 시가(open), 고가(high), 저가(low), 종가(close), 거래량(volume) 데이터를 포함해야 합니다. 최근 1년치 일봉 데이터를 가져옵니다.',
+    description: '지정된 티커에 대한 과거 주가 데이터를 야후 파이낸스에서 가져옵니다. 날짜, 시가(open), 고가(high), 저가(low), 종가(close), 거래량(volume) 데이터를 포함해야 합니다. 항상 오늘 날짜로부터 과거 1년치 일봉 데이터를 가져옵니다.',
     inputSchema: z.object({
       ticker: z.string().describe('주식 티커 심볼 (예: AAPL, MSFT, GOOG, 005930.KS). 야후 파이낸스 형식 사용 권장.'),
     }),
@@ -38,13 +38,14 @@ const getStockDataTool = ai.defineTool(
   async ({ticker}) => {
     console.log(`[getStockDataTool] 호출됨: ticker='${ticker}'`);
     
+    // 항상 오늘 날짜로부터 정확히 1년치 데이터를 가져오도록 날짜 설정
     const endDate = dayjs().format('YYYY-MM-DD');
     const startDate = dayjs().subtract(1, 'year').format('YYYY-MM-DD');
     const queryInterval = '1d';
 
     const queryOptions = {
       period1: startDate,
-      // period2: endDate, // period2를 생략하면 가장 최근 데이터까지 가져옴
+      period2: endDate, // 종료일을 명시적으로 오늘 날짜로 설정
       interval: queryInterval, 
     };
 
@@ -83,8 +84,8 @@ const getStockDataTool = ai.defineTool(
           (price.volume === undefined || (typeof price.volume === 'number' && isFinite(price.volume)))
       );
       
-      if (validPrices.length === 0) {
-          const errorMsg = `DATA_INCOMPLETE: 티커 '${ticker}'에 대한 유효한 OHLCV 데이터를 찾을 수 없습니다. 티커를 확인하거나 다른 티커를 시도해보세요.`;
+      if (validPrices.length < 2) { // 차트를 그리려면 최소 2개의 데이터 포인트가 필요
+          const errorMsg = `DATA_INCOMPLETE: 티커 '${ticker}'에 대한 유효한 OHLCV 데이터가 부족합니다 (${validPrices.length}개). 차트를 표시할 수 없습니다.`;
           console.warn(`[getStockDataTool] 경고: ${errorMsg}`);
           return { prices: [], error: errorMsg };
       }
@@ -92,11 +93,6 @@ const getStockDataTool = ai.defineTool(
       validPrices.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
       console.log(`[getStockDataTool] 유효한 데이터 ${validPrices.length}개를 처리했습니다. 기간: ${validPrices[0].date} ~ ${validPrices[validPrices.length - 1].date}`);
-      
-      // 데이터가 1년치에 비해 너무 적으면 경고
-      if (validPrices.length < 100) {
-        console.warn(`[getStockDataTool] 경고: 티커 '${ticker}'에 대한 유효 데이터가 부족합니다 (${validPrices.length}개).`);
-      }
       
       return { prices: validPrices };
 
@@ -106,8 +102,8 @@ const getStockDataTool = ai.defineTool(
       let errorType = "UNKNOWN_ERROR";
       let errorMessageContent = `티커 '${ticker}'의 데이터를 가져오는 중 알 수 없는 오류가 발생했습니다.`;
 
-      if (error && error.message) {
-        const lowerCaseMessage = error.message.toLowerCase();
+      if (error && (error.message || error.code)) {
+        const lowerCaseMessage = (error.message || '').toLowerCase();
         if (lowerCaseMessage.includes('not found') || error.code === '404' || (error.response && error.response.status === 404)) { 
           errorType = "TICKER_NOT_FOUND";
           errorMessageContent = `티커 '${ticker}'를 찾을 수 없습니다. 올바른 티커인지 확인해주세요.`;
@@ -179,15 +175,15 @@ const prompt = ai.definePrompt({
   - 선택된 기술 지표: {{#each indicators}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}
   - 사용자 위험 감수 수준: {{{riskTolerance}}}
 
-  getStockData 도구의 응답에 'error' 필드가 있고, 오류 메시지가 "TICKER_NOT_FOUND"로 시작하면, 
+  getStockData 도구의 응답에 'error' 필드가 있고, 오류 메시지에 "TICKER_NOT_FOUND"가 포함되어 있으면, 
   explanation 필드에 "입력하신 티커 '{{{ticker}}}'를 찾을 수 없었습니다. 티커 심볼이 정확한지 다시 한번 확인해주시겠어요? 또는 다른 티커로 시도해보시는 건 어떠세요?" 와 같이 사용자 친화적인 메시지를 담아주세요. 
   signal 필드는 "분석 불가"로 설정하고, confidence는 "낮음", chartData와 signalEvents는 빈 배열로 설정합니다.
 
-  만약 getStockData 도구의 응답에 'error' 필드가 있고, 오류 메시지가 "DATA_INCOMPLETE"로 시작하면, 
-  explanation 필드에 "티커 '{{{ticker}}}'에 대한 데이터는 찾았지만, 차트를 그리기에 충분한 가격 정보(시가, 고가, 저가, 종가)가 부족합니다. 다른 티커를 시도해보시거나, 해당 티커의 데이터가 충분한지 확인해주세요." 와 같이 메시지를 설정해주세요.
+  만약 getStockData 도구의 응답에 'error' 필드가 있고, 오류 메시지에 "DATA_INCOMPLETE"가 포함되어 있으면, 
+  explanation 필드에 "티커 '{{{ticker}}}'에 대한 데이터는 찾았지만, 차트를 그리기에 충분한 가격 정보가 부족합니다. 다른 티커를 시도해보시거나, 해당 티커의 데이터가 충분한지 확인해주세요." 와 같이 메시지를 설정해주세요.
   signal 필드는 "분석 불가"로 설정하고, confidence는 "낮음", chartData와 signalEvents는 빈 배열로 설정합니다.
 
-  만약 getStockData 도구의 응답에 'error' 필드가 있고, 오류 메시지가 "TICKER_NOT_FOUND"나 "DATA_INCOMPLETE"가 아닌 다른 내용(예: "API_ERROR", "UNKNOWN_ERROR" 등)으로 시작하면, 
+  만약 getStockData 도구의 응답에 'error' 필드가 있고, "TICKER_NOT_FOUND"나 "DATA_INCOMPLETE"가 아닌 다른 내용(예: "API_ERROR", "UNKNOWN_ERROR" 등)으로 시작하면, 
   explanation 필드에 "데이터 조회 중 다음 오류가 발생했습니다: [받은 오류 메시지 전체]" 와 같이 명확히 명시해주세요.
   signal 필드는 "분석 불가"로 설정하고, confidence는 "낮음", chartData와 signalEvents는 빈 배열로 설정합니다.
 
@@ -254,4 +250,3 @@ const analyzeStockSignalFlow = ai.defineFlow(
     return output;
   }
 );
-
