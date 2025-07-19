@@ -23,11 +23,11 @@ const getStockDataTool = ai.defineTool(
       prices: z.array(
         z.object({
           date: z.string(),
-          open: z.number().optional(),
-          high: z.number().optional(),
-          low: z.number().optional(),
+          open: z.number(),
+          high: z.number(),
+          low: z.number(),
           close: z.number(),
-          volume: z.number().optional(),
+          volume: z.number(),
         })
       ),
       error: z.string().optional(),
@@ -55,11 +55,11 @@ const AnalyzeStockSignalOutputSchema = z.object({
   chartData: z.array(
     z.object({
       date: z.string().describe("날짜 (YYYY-MM-DD)"),
-      open: z.number().optional().describe("시가"),
-      high: z.number().optional().describe("고가"),
-      low: z.number().optional().describe("저가"),
+      open: z.number().describe("시가"),
+      high: z.number().describe("고가"),
+      low: z.number().describe("저가"),
       close: z.number().describe("종가"),
-      volume: z.number().optional().describe("거래량"),
+      volume: z.number().describe("거래량"),
     })
   ).optional().describe("차트 표시에 사용될 과거 주가 데이터. getStockDataTool에서 받은 데이터를 기반으로 제공."),
   signalEvents: z.array(
@@ -93,18 +93,17 @@ const prompt = ai.definePrompt({
   - 선택된 기술 지표: {{#each indicators}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}
   - 사용자 위험 감수 수준: {{{riskTolerance}}}
 
-  getStockData 도구의 응답에 'error' 필드가 있고, 오류 메시지에 "TICKER_NOT_FOUND"가 포함되어 있으면, 
-  explanation 필드에 "입력하신 티커 '{{{ticker}}}'를 찾을 수 없었습니다. 티커 심볼이 정확한지 다시 한번 확인해주시겠어요? 또는 다른 티커로 시도해보시는 건 어떠세요?" 와 같이 사용자 친화적인 메시지를 담아주세요. 
-  signal 필드는 "분석 불가"로 설정하고, confidence는 "낮음", chartData와 signalEvents는 빈 배열로 설정합니다.
+  --- 데이터 조회 결과 처리 규칙 ---
+  getStockData 도구의 응답에 'error' 필드가 있는 경우, 다음 규칙에 따라 사용자 친화적인 메시지를 생성해주세요.
+  - "TICKER_NOT_FOUND": "입력하신 티커 '{{{ticker}}}'를 찾을 수 없었습니다. 티커 심볼이 정확한지 다시 한번 확인해주시겠어요? 또는 다른 티커로 시도해보시는 건 어떠세요?"
+  - "DATA_INCOMPLETE": "티커 '{{{ticker}}}'에 대한 데이터는 찾았지만, 차트를 그리기에 충분한 가격 정보가 부족합니다. 다른 티커를 시도해보시거나, 해당 티커의 데이터가 충분한지 확인해주세요."
+  - "API_LIMIT_REACHED": "데이터 제공업체의 일일 API 사용량을 초과한 것 같습니다. 잠시 후 다시 시도해주시거나, 내일 다시 이용해주세요."
+  - "ALPHA_VANTAGE_API_KEY_MISSING": "데이터 조회를 위한 API 키가 설정되지 않았습니다. 관리자에게 문의해주세요."
+  - 그 외 다른 오류: "데이터 조회 중 다음 오류가 발생했습니다: [받은 오류 메시지 전체]"
 
-  만약 getStockData 도구의 응답에 'error' 필드가 있고, 오류 메시지에 "DATA_INCOMPLETE"가 포함되어 있으면, 
-  explanation 필드에 "티커 '{{{ticker}}}'에 대한 데이터는 찾았지만, 차트를 그리기에 충분한 가격 정보가 부족합니다. 다른 티커를 시도해보시거나, 해당 티커의 데이터가 충분한지 확인해주세요." 와 같이 메시지를 설정해주세요.
-  signal 필드는 "분석 불가"로 설정하고, confidence는 "낮음", chartData와 signalEvents는 빈 배열로 설정합니다.
+  오류 발생 시, explanation 필드에 위에서 생성한 메시지를 담고, signal 필드는 "분석 불가"로 설정하며, chartData와 signalEvents는 빈 배열로 설정합니다.
 
-  만약 getStockData 도구의 응답에 'error' 필드가 있고, "TICKER_NOT_FOUND"나 "DATA_INCOMPLETE"가 아닌 다른 내용(예: "API_ERROR", "UNKNOWN_ERROR" 등)으로 시작하면, 
-  explanation 필드에 "데이터 조회 중 다음 오류가 발생했습니다: [받은 오류 메시지 전체]" 와 같이 명확히 명시해주세요.
-  signal 필드는 "분석 불가"로 설정하고, confidence는 "낮음", chartData와 signalEvents는 빈 배열로 설정합니다.
-
+  --- 데이터 분석 규칙 ---
   데이터를 성공적으로 가져왔다면 (즉, getStockData 도구 응답에 'error' 필드가 없거나 비어 있다면), 해당 데이터와 선택된 기술 지표를 종합적으로 고려하여, 다음 사항을 포함한 분석 결과를 제공해주세요:
 
   1.  **매매 신호 (signal)**: (예: "강력 매수", "매수 고려", "관망", "매도 고려", "분석 불가")
