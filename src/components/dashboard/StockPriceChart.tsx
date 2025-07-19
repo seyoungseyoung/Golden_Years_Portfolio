@@ -1,3 +1,4 @@
+
 // src/components/dashboard/StockPriceChart.tsx
 "use client";
 
@@ -12,6 +13,7 @@ import {
   Tooltip,
   Legend,
   ReferenceDot,
+  Cell,
 } from 'recharts';
 import { ArrowUpCircle, ArrowDownCircle, MinusCircle } from 'lucide-react';
 import type { AnalyzeStockSignalOutput } from '@/types';
@@ -77,7 +79,7 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
   const dataWithCandle = chartData.map(d => ({
     ...d,
     candleWick: [d.low, d.high],
-    candleBody: [d.open, d.close], // 상승/하락용 Bar에서 처리
+    candleBody: [d.open, d.close],
     isRising: d.close >= d.open,
     event: signalEvents.find(e => e.date === d.date),
   }));
@@ -124,18 +126,7 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
           {/* 2. 몸통 (Body) - isRising에 따라 색상 적용 */}
           <Bar dataKey="candleBody" yAxisId="left" isAnimationActive={false} name="시가/종가">
             {dataWithCandle.map((entry, index) => (
-              <Bar
-                key={`cell-${index}`}
-                dataKey={entry.isRising ? 'candleBody' : undefined}
-                fill="hsl(var(--chart-2))"
-              />
-            ))}
-            {dataWithCandle.map((entry, index) => (
-              <Bar
-                key={`cell-${index}`}
-                dataKey={!entry.isRising ? 'candleBody' : undefined}
-                fill="hsl(var(--destructive))"
-              />
+              <Cell key={`cell-${index}`} fill={entry.isRising ? 'hsl(var(--chart-2))' : 'hsl(var(--destructive))'} />
             ))}
           </Bar>
 

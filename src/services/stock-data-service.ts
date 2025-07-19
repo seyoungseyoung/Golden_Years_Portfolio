@@ -1,3 +1,4 @@
+
 // src/services/stock-data-service.ts
 /**
  * @fileOverview 주식 데이터 조회를 위한 서비스입니다.
@@ -32,10 +33,11 @@ export async function getStockData(ticker: string): Promise<StockDataResponse> {
   console.log(`[getStockData] Service called for ticker: '${ticker}'`);
 
   const today = dayjs();
-  const yearAgo = today.subtract(1, 'year');
+  // 야후 파이낸스는 주말/공휴일 데이터가 없으므로 넉넉하게 2년치 요청
+  const twoYearsAgo = today.subtract(2, 'year'); 
 
   const queryOptions = {
-    period1: yearAgo.format('YYYY-MM-DD'),
+    period1: twoYearsAgo.format('YYYY-MM-DD'),
     period2: today.format('YYYY-MM-DD'),
     interval: '1d' as const,
   };
@@ -56,8 +58,9 @@ export async function getStockData(ticker: string): Promise<StockDataResponse> {
 
     const validPrices = results
       .filter(data => {
-        // API가 오래된 데이터를 주더라도, 오늘로부터 1년 이내의 데이터만 사용하도록 필터링
-        return dayjs(data.date).isAfter(oneYearAgoDate);
+        // API가 어떤 데이터를 주든, 오늘로부터 1년 이내의 데이터만 사용하도록 필터링
+        const dataDate = dayjs(data.date);
+        return dataDate.isAfter(oneYearAgoDate) && dataDate.isBefore(dayjs().add(1, 'day'));
       })
       .map((data) => ({
         date: dayjs(data.date).format('YYYY-MM-DD'),
