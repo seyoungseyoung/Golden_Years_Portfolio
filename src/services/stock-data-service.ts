@@ -11,11 +11,10 @@ import yahooFinance from 'yahoo-finance2';
 
 export interface StockData {
   date: string;
-  open?: number;
-  high?: number;
-  low?: number;
+  open: number;
+  high: number;
+  low: number;
   close: number;
-  adjClose?: number;
   volume?: number;
 }
 
@@ -25,19 +24,19 @@ export interface StockDataResponse {
 }
 
 /**
- * 지정된 티커에 대한 과거 1년치 주가 데이터를 야후 파이낸스에서 가져옵니다.
+ * 지정된 티커에 대한 과거 주가 데이터를 야후 파이낸스에서 가져옵니다.
  * @param ticker - 주식 티커 심볼 (예: AAPL, 005930.KS)
  * @returns {Promise<StockDataResponse>} 주가 데이터 배열과 오류 메시지를 포함하는 객체
  */
 export async function getStockData(ticker: string): Promise<StockDataResponse> {
   console.log(`[getStockData] Service called for ticker: '${ticker}'`);
 
-  const endDate = dayjs();
-  const startDate = endDate.subtract(1, 'year');
+  const today = dayjs();
+  const yearAgo = today.subtract(1, 'year');
 
   const queryOptions = {
-    period1: startDate.format('YYYY-MM-DD'),
-    period2: endDate.format('YYYY-MM-DD'),
+    period1: yearAgo.format('YYYY-MM-DD'),
+    period2: today.format('YYYY-MM-DD'),
     interval: '1d' as const,
   };
   
@@ -47,13 +46,19 @@ export async function getStockData(ticker: string): Promise<StockDataResponse> {
     const results = await yahooFinance.historical(ticker, queryOptions);
     
     if (!results || results.length === 0) {
-      const errorMsg = `TICKER_NOT_FOUND: 티커 '${ticker}'에 대한 데이터를 야후 파이낸스에서 찾을 수 없습니다. (기간: ${queryOptions.period1} ~ ${queryOptions.period2})`;
+      const errorMsg = `TICKER_NOT_FOUND: 티커 '${ticker}'에 대한 데이터를 야후 파이낸스에서 찾을 수 없습니다.`;
       console.warn(`[getStockData] Warning: ${errorMsg}`);
       return { prices: [], error: errorMsg };
     }
-    console.log(`[getStockData] Received ${results.length} results from Yahoo Finance.`);
+    console.log(`[getStockData] Received ${results.length} raw results from Yahoo Finance.`);
+
+    const oneYearAgoDate = dayjs().subtract(1, 'year').startOf('day');
 
     const validPrices = results
+      .filter(data => {
+        // API가 오래된 데이터를 주더라도, 오늘로부터 1년 이내의 데이터만 사용하도록 필터링
+        return dayjs(data.date).isAfter(oneYearAgoDate);
+      })
       .map((data) => ({
         date: dayjs(data.date).format('YYYY-MM-DD'),
         open: data.open,
@@ -61,24 +66,23 @@ export async function getStockData(ticker: string): Promise<StockDataResponse> {
         low: data.low,
         close: data.close,
         volume: data.volume,
-        adjClose: data.adjClose,
       }))
       .filter((price): price is StockData =>
         price.date !== null &&
-        typeof price.close === 'number' && isFinite(price.close) &&
+        typeof price.open === 'number' && isFinite(price.open) &&
         typeof price.high === 'number' && isFinite(price.high) &&
         typeof price.low === 'number' && isFinite(price.low) &&
-        typeof price.open === 'number' && isFinite(price.open)
+        typeof price.close === 'number' && isFinite(price.close)
       )
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     if (validPrices.length < 2) {
-      const errorMsg = `DATA_INCOMPLETE: 티커 '${ticker}'에 대한 유효한 OHLCV 데이터가 부족합니다 (${validPrices.length}개). 차트를 표시할 수 없습니다.`;
+      const errorMsg = `DATA_INCOMPLETE: 티커 '${ticker}'에 대한 유효한 OHLCV 데이터가 최근 1년 내에 부족합니다 (${validPrices.length}개). 차트를 표시할 수 없습니다.`;
       console.warn(`[getStockData] Warning: ${errorMsg}`);
       return { prices: [], error: errorMsg };
     }
     
-    console.log(`[getStockData] Processed ${validPrices.length} valid data points. Period: ${validPrices[0].date} to ${validPrices[validPrices.length - 1].date}`);
+    console.log(`[getStockData] Processed ${validPrices.length} valid data points for the last year. Period: ${validPrices[0].date} to ${validPrices[validPrices.length - 1].date}`);
     return { prices: validPrices };
 
   } catch (error: any) {
@@ -87,7 +91,7 @@ export async function getStockData(ticker: string): Promise<StockDataResponse> {
     let errorType = "UNKNOWN_ERROR";
     let errorMessageContent = `티커 '${ticker}'의 데이터를 가져오는 중 알 수 없는 오류가 발생했습니다.`;
 
-    if (error.code === '404' || error.message?.includes('404 Not Found')) {
+    if (error.code === '404' || error.message?.includes('404 Not Found') || error.message?.toLowerCase().includes('not found')) {
       errorType = "TICKER_NOT_FOUND";
       errorMessageContent = `티커 '${ticker}'를 찾을 수 없습니다. 올바른 티커인지 확인해주세요.`;
     } else {
