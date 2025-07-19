@@ -1,3 +1,4 @@
+
 // src/services/stock-data-service.ts
 /**
  * @fileOverview 주식 데이터 조회를 위한 서비스입니다. Alpha Vantage API를 사용합니다.
@@ -104,8 +105,8 @@ export async function getStockData(ticker: string): Promise<StockDataResponse> {
     return { prices: validPrices };
 
   } catch (error: any) {
-    const errorMsg = `UNKNOWN_ERROR: 데이터를 가져오는 중 알 수 없는 오류가 발생했습니다: ${error.message}`;
-    console.error(`[getStockData] Error: ${errorMsg}`);
+    const errorMsg = `UNKNOWN_ERROR: 데이터를 가져오는 중 알 수 없는 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`;
+    console.error(`[getStockData] Fatal Error: ${errorMsg}`, error);
     return { prices: [], error: errorMsg };
   }
 }
