@@ -1,3 +1,4 @@
+
 // src/app/dashboard/page.tsx
 "use client";
 
@@ -21,15 +22,18 @@ export default function DashboardPage() {
 
 
   useEffect(() => {
-    if (isInitialized) { // Wait for context to confirm initialization status
+    // isInitialized가 true가 될 때까지 기다립니다.
+    if (isInitialized) {
         setIsPageLoading(false);
     }
   }, [isInitialized]);
   
+  // isInitialized가 false일 때 스켈레톤 UI를 표시합니다.
   if (isPageLoading) {
     return <DashboardSkeleton />;
   }
 
+  // 초기화 후 strategy가 없는 경우 설문지 페이지로 유도합니다.
   if (!strategy) {
     return (
       <div className="flex flex-col items-center justify-center text-center py-12">
@@ -62,6 +66,7 @@ export default function DashboardPage() {
   );
 }
 
+// 대시보드 스켈레톤 컴포넌트
 function DashboardSkeleton() {
   return (
     <div className="space-y-8 py-8">
@@ -108,3 +113,5 @@ function DashboardSkeleton() {
     </div>
   );
 }
+
+    
