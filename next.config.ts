@@ -8,6 +8,12 @@ const REPOSITORY_NAME = 'YOUR_REPOSITORY_NAME';
 const isProd = process.env.NODE_ENV === 'production';
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // Firebase Studio preview environment requires this.
+    allowedDevOrigins: [
+        'https://*.cloudworkstations.dev', // Allow any subdomain from cloudworkstations.dev
+    ],
+  },
   output: 'export', // 정적 사이트 익스포트를 위해 추가
   basePath: isProd ? `/${REPOSITORY_NAME}` : '', // GitHub Pages 배포를 위해 추가
   assetPrefix: isProd ? `/${REPOSITORY_NAME}` : '', // GitHub Pages 배포를 위해 추가
