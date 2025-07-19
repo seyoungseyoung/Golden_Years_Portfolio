@@ -13,7 +13,6 @@ import {
   Tooltip,
   Legend,
   ReferenceDot,
-  Line,
   Cell,
 } from 'recharts';
 import { ArrowUpCircle, ArrowDownCircle, MinusCircle } from 'lucide-react';
@@ -80,8 +79,8 @@ export function StockPriceChart({ chartData, signalEvents }: StockPriceChartProp
   const dataWithCandle = chartData.map(d => ({
     ...d,
     candleWick: [d.low, d.high],
-    candleBody: [d.open, d.close],
-    isRising: d.close >= d.open,
+    candleBody: d.open && d.close ? [d.open, d.close] : undefined,
+    isRising: d.close >= (d.open ?? d.close),
     event: signalEvents.find(e => e.date === d.date),
   }));
 
