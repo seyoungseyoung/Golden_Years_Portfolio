@@ -1,3 +1,4 @@
+
 // src/components/dashboard/StockPriceChart.tsx
 "use client";
 
@@ -13,6 +14,7 @@ import {
   Legend,
   ReferenceDot,
   Line,
+  Cell,
 } from 'recharts';
 import { ArrowUpCircle, ArrowDownCircle, MinusCircle } from 'lucide-react';
 import type { AnalyzeStockSignalOutput } from '@/types';
